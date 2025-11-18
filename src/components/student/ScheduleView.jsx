@@ -1,1 +1,0 @@
-// Student schedule view component

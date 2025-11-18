@@ -1,1 +1,0 @@
-// Student grade card component

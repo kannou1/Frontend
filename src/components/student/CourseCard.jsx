@@ -1,1 +1,0 @@
-// Student course card component

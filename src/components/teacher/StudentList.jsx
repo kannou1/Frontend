@@ -1,1 +1,0 @@
-// Teacher student list component

@@ -1,15 +1,14 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
-import { 
-  LayoutDashboard, 
-  BookOpen, 
-  Calendar, 
-  FileText, 
-  UserCheck, 
-  Send, 
-  MessageSquare, 
+import {
+  LayoutDashboard,
+  BookOpen,
+  Calendar,
+  FileText,
+  UserCheck,
+  Send,
+  MessageSquare,
   Bell,
-  User
 } from "lucide-react";
 import {
   Sidebar,
@@ -27,17 +26,17 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 const navItems = [
-  { path: "/", label: "Dashboard", icon: LayoutDashboard },
-  { path: "/courses", label: "Courses", icon: BookOpen },
-  { path: "/timetable", label: "Timetable", icon: Calendar },
-  { path: "/exams", label: "Exams & Notes", icon: FileText },
-  { path: "/attendance", label: "Attendance", icon: UserCheck },
-  { path: "/requests", label: "Requests", icon: Send },
-  { path: "/messages", label: "Messages", icon: MessageSquare },
-  { path: "/notifications", label: "Notifications", icon: Bell },
+  { path: "", label: "Dashboard", icon: LayoutDashboard },
+  { path: "courses", label: "Courses", icon: BookOpen },
+  { path: "timetable", label: "Timetable", icon: Calendar },
+  { path: "exams", label: "Exams & Notes", icon: FileText },
+  { path: "attendance", label: "Attendance", icon: UserCheck },
+  { path: "requests", label: "Requests", icon: Send },
+  { path: "messages", label: "Messages", icon: MessageSquare },
+  { path: "notifications", label: "Notifications", icon: Bell },
 ];
 
-export function AppSidebar() {
+export function StudentSidebar() {
   const location = useLocation();
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
@@ -69,21 +68,21 @@ export function AppSidebar() {
             <SidebarMenu className="space-y-1">
               {navItems.map((item) => {
                 const Icon = item.icon;
-                const isActive = location.pathname === item.path;
-                
+                const isActive = location.pathname === `/student${item.path ? `/${item.path}` : ''}`;
+
                 return (
                   <SidebarMenuItem key={item.path}>
-                    <SidebarMenuButton 
-                      asChild 
-                      isActive={isActive} 
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActive}
                       tooltip={item.label}
                       className={`transition-all duration-200 hover:bg-accent/50 ${
-                        isCollapsed 
-                          ? 'h-11 w-11 p-0 justify-center mx-auto' 
+                        isCollapsed
+                          ? 'h-11 w-11 p-0 justify-center mx-auto'
                           : 'h-11'
                       } ${
-                        isActive 
-                          ? 'bg-gradient-to-r from-primary/15 to-secondary/15 border-l-4 border-primary shadow-sm' 
+                        isActive
+                          ? 'bg-gradient-to-r from-primary/15 to-secondary/15 border-l-4 border-primary shadow-sm'
                           : ''
                       }`}
                     >

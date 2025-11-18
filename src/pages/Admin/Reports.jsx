@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BarChart3, TrendingUp, Users, BookOpen, Download, Calendar } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 
 export default function AdminReports() {
   const [selectedPeriod, setSelectedPeriod] = useState('month');
@@ -20,6 +22,31 @@ export default function AdminReports() {
     { id: 2, name: 'Teacher Performance Report', description: 'Course completion and student feedback', lastGenerated: '2024-01-14', type: 'performance' },
     { id: 3, name: 'Attendance Summary', description: 'Overall attendance patterns', lastGenerated: '2024-01-13', type: 'attendance' },
     { id: 4, name: 'Course Analytics', description: 'Course popularity and completion rates', lastGenerated: '2024-01-12', type: 'analytics' },
+  ];
+
+  // Sample data for charts
+  const enrollmentData = [
+    { month: 'Jan', students: 1200, teachers: 85 },
+    { month: 'Feb', students: 1250, teachers: 87 },
+    { month: 'Mar', students: 1180, teachers: 86 },
+    { month: 'Apr', students: 1320, teachers: 89 },
+    { month: 'May', students: 1280, teachers: 88 },
+    { month: 'Jun', students: 1350, teachers: 90 },
+  ];
+
+  const attendanceByClassData = [
+    { class: 'Grade 10-A', attendance: 96 },
+    { class: 'Grade 10-B', attendance: 92 },
+    { class: 'Grade 11-A', attendance: 89 },
+    { class: 'Grade 11-B', attendance: 94 },
+    { class: 'Grade 12-A', attendance: 91 },
+    { class: 'Grade 12-B', attendance: 87 },
+  ];
+
+  const attendanceData = [
+    { name: 'Present', value: 94, color: '#10b981' },
+    { name: 'Absent', value: 4, color: '#ef4444' },
+    { name: 'Late', value: 2, color: '#f59e0b' },
   ];
 
   return (
@@ -84,9 +111,16 @@ export default function AdminReports() {
                   <CardDescription>Student enrollment over time</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-64 flex items-center justify-center text-muted-foreground">
-                    Chart placeholder - Enrollment trends visualization
-                  </div>
+                  <ResponsiveContainer width="100%" height={250}>
+                    <LineChart data={enrollmentData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="month" />
+                      <YAxis />
+                      <Tooltip />
+                      <Line type="monotone" dataKey="students" stroke="#8884d8" strokeWidth={2} />
+                      <Line type="monotone" dataKey="teachers" stroke="#82ca9d" strokeWidth={2} />
+                    </LineChart>
+                  </ResponsiveContainer>
                 </CardContent>
               </Card>
 
@@ -94,14 +128,20 @@ export default function AdminReports() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <TrendingUp className="h-5 w-5" />
-                    Course Performance
+                    Attendance by Class
                   </CardTitle>
-                  <CardDescription>Course completion and ratings</CardDescription>
+                  <CardDescription>Attendance rates across different classes</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-64 flex items-center justify-center text-muted-foreground">
-                    Chart placeholder - Course performance metrics
-                  </div>
+                  <ResponsiveContainer width="100%" height={250}>
+                    <BarChart data={attendanceByClassData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="class" />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="attendance" fill="#82ca9d" />
+                    </BarChart>
+                  </ResponsiveContainer>
                 </CardContent>
               </Card>
             </div>
@@ -145,19 +185,46 @@ export default function AdminReports() {
                 <CardDescription>In-depth system analytics and insights</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="text-center p-4 border rounded-lg">
-                      <div className="text-2xl font-bold text-primary">95%</div>
-                      <div className="text-sm text-muted-foreground">Student Satisfaction</div>
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <h4 className="text-lg font-semibold mb-4">Attendance Overview</h4>
+                      <ResponsiveContainer width="100%" height={200}>
+                        <PieChart>
+                          <Pie
+                            data={attendanceData}
+                            cx="50%"
+                            cy="50%"
+                            labelLine={false}
+                            label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                            outerRadius={80}
+                            fill="#8884d8"
+                            dataKey="value"
+                          >
+                            {attendanceData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip />
+                        </PieChart>
+                      </ResponsiveContainer>
                     </div>
-                    <div className="text-center p-4 border rounded-lg">
-                      <div className="text-2xl font-bold text-secondary">87%</div>
-                      <div className="text-sm text-muted-foreground">Course Completion Rate</div>
-                    </div>
-                    <div className="text-center p-4 border rounded-lg">
-                      <div className="text-2xl font-bold text-accent">4.2</div>
-                      <div className="text-sm text-muted-foreground">Average Rating</div>
+                    <div className="space-y-4">
+                      <h4 className="text-lg font-semibold">Key Metrics</h4>
+                      <div className="grid grid-cols-1 gap-4">
+                        <div className="text-center p-4 border rounded-lg">
+                          <div className="text-2xl font-bold text-primary">95%</div>
+                          <div className="text-sm text-muted-foreground">Student Satisfaction</div>
+                        </div>
+                        <div className="text-center p-4 border rounded-lg">
+                          <div className="text-2xl font-bold text-secondary">87%</div>
+                          <div className="text-sm text-muted-foreground">Course Completion Rate</div>
+                        </div>
+                        <div className="text-center p-4 border rounded-lg">
+                          <div className="text-2xl font-bold text-accent">4.2</div>
+                          <div className="text-sm text-muted-foreground">Average Rating</div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
