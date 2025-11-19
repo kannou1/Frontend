@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Outlet } from "react-router-dom";
+import { Outlet, Link } from "react-router-dom";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { StudentSidebar } from "@/components/Sidebars/StudentSidebar";
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -69,31 +69,59 @@ const StudentLayout = ({ children }) => {
               {/* Notifications */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-9 w-9 relative">
-                    <Bell className="h-5 w-5" />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-10 w-10 relative rounded-full hover:bg-primary/10 transition-all duration-200 hover:scale-105 group"
+                  >
+                    <Bell className="h-5 w-5 group-hover:text-primary transition-colors" />
                     {unreadCount > 0 && (
                       <Badge
                         variant="destructive"
-                        className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs"
+                        className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs animate-pulse"
                       >
                         {unreadCount}
                       </Badge>
                     )}
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-80">
-                  <DropdownMenuLabel>Notifications</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  {notifications.map((notification) => (
-                    <DropdownMenuItem key={notification.id} className="flex flex-col items-start p-3">
-                      <div className="flex items-center gap-2 w-full">
-                        <span className="text-sm">{notification.message}</span>
+                <DropdownMenuContent align="end" className="w-80 p-0 shadow-lg border-0 bg-background/95 backdrop-blur-sm">
+                  <div className="p-4 border-b">
+                    <h3 className="font-semibold text-lg bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+                      Notifications
+                    </h3>
+                    <p className="text-sm text-muted-foreground">You have {unreadCount} unread notifications</p>
+                  </div>
+                  <div className="max-h-80 overflow-y-auto">
+                    {notifications.map((notification) => (
+                      <div
+                        key={notification.id}
+                        className="flex items-start gap-3 p-4 hover:bg-muted/50 transition-colors border-b border-border/50 last:border-b-0"
+                      >
+                        <div className="flex-shrink-0 mt-1">
+                          <div className={`h-3 w-3 rounded-full ${notification.unread ? 'bg-primary animate-pulse' : 'bg-muted'}`} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm ${notification.unread ? 'font-medium' : 'text-muted-foreground'}`}>
+                            {notification.message}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">2 hours ago</p>
+                        </div>
                         {notification.unread && (
-                          <div className="h-2 w-2 bg-primary rounded-full ml-auto" />
+                          <div className="flex-shrink-0">
+                            <div className="h-2 w-2 bg-primary rounded-full" />
+                          </div>
                         )}
                       </div>
-                    </DropdownMenuItem>
-                  ))}
+                    ))}
+                  </div>
+                  <div className="p-3 border-t">
+                    <Link to="/student/notifications">
+                      <Button variant="ghost" className="w-full text-sm hover:bg-primary/10">
+                        View All Notifications
+                      </Button>
+                    </Link>
+                  </div>
                 </DropdownMenuContent>
               </DropdownMenu>
 

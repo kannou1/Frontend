@@ -176,14 +176,14 @@ const Timetable = () => {
         </Card>
 
         {/* Schedule Grid */}
-        <div className="overflow-x-auto animate-scale-in">
-          <div className="min-w-[800px] space-y-4">
+        <div className="animate-scale-in">
+          <div className="w-full max-w-none">
             {/* Days Header */}
-            <div className="grid grid-cols-6 gap-4">
-              <div className="font-semibold text-sm text-muted-foreground">Time</div>
+            <div className="grid grid-cols-6 gap-2 mb-4">
+              <div className="font-semibold text-sm text-muted-foreground text-center">Time</div>
               {days.map((day, index) => (
-                <div 
-                  key={day} 
+                <div
+                  key={day}
                   className={`text-center ${getTodayIndex() === index ? 'text-primary font-bold' : 'font-semibold'}`}
                 >
                   <div className="text-sm mb-1">{day}</div>
@@ -196,8 +196,8 @@ const Timetable = () => {
 
             {/* Time Slots */}
             {timeSlots.map((time) => (
-              <div key={time} className="grid grid-cols-6 gap-4 items-start">
-                <div className="font-medium text-sm text-muted-foreground pt-2">
+              <div key={time} className="grid grid-cols-6 gap-2 items-start mb-2">
+                <div className="font-medium text-sm text-muted-foreground text-center py-2">
                   {time}
                 </div>
                 {days.map((day) => {
@@ -208,7 +208,7 @@ const Timetable = () => {
                         key={`${day}-${time}`}
                         style={{ gridRow: `span ${courseData.duration}` }}
                         onClick={() => setSelectedCourse({ ...courseData, day, time })}
-                        className={`group p-4 cursor-pointer hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border-2 overflow-hidden relative animate-fade-in`}
+                        className={`group p-2 cursor-pointer hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border overflow-hidden relative animate-fade-in min-h-[80px]`}
                       >
                         <div className={`absolute inset-0 bg-gradient-to-br ${getCellClass(courseData.course)} opacity-90 group-hover:opacity-100 transition-opacity`} />
                         
