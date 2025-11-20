@@ -2,14 +2,15 @@ export const ROUTES = {
   // Auth routes
   LOGIN: '/login',
   REGISTER: '/register',
-  
+
   // Admin routes
   ADMIN_DASHBOARD: '/admin/dashboard',
-  ADMIN_USERS: '/admin/users',
+  ADMIN_STUDENTS: '/admin/students',
+  ADMIN_TEACHERS: '/admin/teachers',
   ADMIN_COURSES: '/admin/courses',
   ADMIN_REPORTS: '/admin/reports',
   ADMIN_SETTINGS: '/admin/settings',
-  
+
   // Teacher routes
   TEACHER_DASHBOARD: '/teacher/dashboard',
   TEACHER_COURSES: '/teacher/courses',
@@ -17,7 +18,7 @@ export const ROUTES = {
   TEACHER_GRADING: '/teacher/grading',
   TEACHER_ATTENDANCE: '/teacher/attendance',
   TEACHER_SCHEDULE: '/teacher/schedule',
-  
+
   // Student routes
   STUDENT_DASHBOARD: '/student/dashboard',
   STUDENT_COURSES: '/student/courses',

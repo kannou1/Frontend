@@ -18,7 +18,8 @@ export default function AdminDashboard() {
   ];
 
   const adminActions = [
-    { title: 'Manage Users', description: 'Add, edit, or remove students and teachers', icon: Users, route: ROUTES.ADMIN_USERS },
+    { title: 'Manage Students', description: 'Add, edit, or remove students', icon: Users, route: ROUTES.ADMIN_STUDENTS },
+    { title: 'Manage Teachers', description: 'Add, edit, or remove teachers', icon: Users, route: ROUTES.ADMIN_TEACHERS },
     { title: 'Manage Courses', description: 'Create and manage course offerings', icon: BookOpen, route: ROUTES.ADMIN_COURSES },
     { title: 'View Reports', description: 'Analytics and performance reports', icon: TrendingUp, route: ROUTES.ADMIN_REPORTS },
     { title: 'System Settings', description: 'Configure system preferences', icon: Settings, route: ROUTES.ADMIN_SETTINGS },

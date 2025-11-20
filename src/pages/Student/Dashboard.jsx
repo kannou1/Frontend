@@ -23,7 +23,7 @@ const StudentDashboard = () => {
       title: "My Courses",
       description: "Access your course materials",
       icon: BookOpen,
-      link: "/courses",
+      link: "/student/courses",
       color: "from-primary via-primary-light to-secondary",
       count: "6 Active",
       stats: "85% Avg Progress"
@@ -32,7 +32,7 @@ const StudentDashboard = () => {
       title: "Timetable",
       description: "Check your schedule",
       icon: Calendar,
-      link: "/timetable",
+      link: "/student/timetable",
       color: "from-secondary via-accent to-primary",
       count: "This Week",
       stats: "15 Classes"
@@ -41,7 +41,7 @@ const StudentDashboard = () => {
       title: "Exams & Notes",
       description: "View grades and exams",
       icon: FileText,
-      link: "/exams",
+      link: "/student/exams",
       color: "from-accent via-secondary to-primary",
       count: "3 Upcoming",
       stats: "3.85 GPA"
@@ -50,7 +50,7 @@ const StudentDashboard = () => {
       title: "Attendance",
       description: "Track your presence",
       icon: UserCheck,
-      link: "/attendance",
+      link: "/student/attendance",
       color: "from-primary via-accent to-secondary",
       count: "94% Rate",
       stats: "Excellent"
@@ -59,7 +59,7 @@ const StudentDashboard = () => {
       title: "Requests",
       description: "Manage your requests",
       icon: Send,
-      link: "/requests",
+      link: "/student/requests",
       color: "from-secondary via-primary to-accent",
       count: "2 Pending",
       stats: "5 Total"
@@ -68,7 +68,7 @@ const StudentDashboard = () => {
       title: "Messages",
       description: "Read your messages",
       icon: MessageSquare,
-      link: "/messages",
+      link: "/student/messages",
       color: "from-accent via-primary to-secondary",
       count: "5 New",
       stats: "12 Total"
@@ -269,7 +269,7 @@ const StudentDashboard = () => {
               })}
             </div>
 
-            <Link to="/notifications">
+            <Link to="/student/notifications">
               <button className="w-full mt-6 py-2 rounded-lg border border-border hover:bg-muted transition-colors text-sm font-medium flex items-center justify-center gap-2">
                 View All Activity
                 <ChevronRight className="h-4 w-4" />
@@ -293,7 +293,7 @@ const StudentDashboard = () => {
               </p>
             </div>
           </div>
-          <Link to="/courses">
+          <Link to="/student/courses">
             <button className="px-6 py-3 rounded-lg bg-gradient-to-r from-primary via-secondary to-accent text-white font-medium hover:opacity-90 transition-opacity shadow-lg">
               Continue Learning
             </button>

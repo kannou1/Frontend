@@ -16,6 +16,8 @@ import AdminUsers from "./pages/Admin/Users";
 import AdminCourses from "./pages/Admin/Courses";
 import AdminReports from "./pages/Admin/Reports";
 import AdminSettings from "./pages/Admin/Settings";
+import AdminMessages from "./pages/Admin/Messages";
+import AdminNotifications from "./pages/Admin/Notifications";
 
 // Teacher
 import TeacherLayout from "./pages/Teacher/Layout";
@@ -25,6 +27,8 @@ import TeacherAttendance from "./pages/Teacher/Attendance";
 import TeacherGrading from "./pages/Teacher/Grading";
 import TeacherSchedule from "./pages/Teacher/Schedule";
 import TeacherStudents from "./pages/Teacher/Students";
+import TeacherMessages from "./pages/Teacher/Messages";
+import TeacherNotifications from "./pages/Teacher/Notifications";
 
 // Student
 import StudentLayout from "./pages/Student/Layout";
@@ -73,20 +77,21 @@ const App = () => (
             <Route path="grading" element={<TeacherGrading />} />
             <Route path="attendance" element={<TeacherAttendance />} />
             <Route path="schedule" element={<TeacherSchedule />} />
-            <Route path="messages" element={<StudentMessages />} />
-            <Route path="notifications" element={<StudentNotifications />} />
+            <Route path="messages" element={<TeacherMessages />} />
+            <Route path="notifications" element={<TeacherNotifications />} />
             <Route path="*" element={<StudentNotFound />} />
           </Route>
 
           {/* Admin routes */}
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<AdminDashboard />} />
-            <Route path="users" element={<AdminUsers />} />
+            <Route path="students" element={<AdminUsers />} />
+            <Route path="teachers" element={<AdminUsers />} />
             <Route path="courses" element={<AdminCourses />} />
             <Route path="reports" element={<AdminReports />} />
             <Route path="settings" element={<AdminSettings />} />
-            <Route path="messages" element={<StudentMessages />} />
-            <Route path="notifications" element={<StudentNotifications />} />
+            <Route path="messages" element={<AdminMessages />} />
+            <Route path="notifications" element={<AdminNotifications />} />
             <Route path="*" element={<StudentNotFound />} />
           </Route>
 
