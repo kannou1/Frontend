@@ -1,10 +1,10 @@
 import React, { useState } from "react";
-import { Outlet, Link } from "react-router-dom";
+import { Outlet, Link, useNavigate } from "react-router-dom";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { StudentSidebar } from "@/components/Sidebars/StudentSidebar";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
-import { Menu, User, Bell, Sun, Moon, LogOut, Settings } from "lucide-react";
+import { Menu, User, Bell, Sun, Moon, LogOut, Settings, Loader2, CheckCircle } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,10 +15,16 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useTheme } from "@/contexts/ThemeContext";
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+
 const StudentLayout = ({ children }) => {
+  const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [showLogoutSuccess, setShowLogoutSuccess] = useState(false);
   const [notifications] = useState([
     { id: 1, message: "New assignment posted", unread: true },
     { id: 2, message: "Exam results available", unread: true },
@@ -26,6 +32,55 @@ const StudentLayout = ({ children }) => {
   ]);
 
   const unreadCount = notifications.filter(n => n.unread).length;
+
+  const handleLogout = async () => {
+    try {
+      setLoggingOut(true);
+      
+      console.log('🔄 Starting logout process...');
+      
+      // Call logout API
+      const response = await fetch(`${API_BASE_URL}/users/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+
+      console.log('📡 Logout API response status:', response.status);
+
+      const data = await response.json();
+      console.log('📦 Logout API response data:', data);
+
+      // Clear local storage regardless of response
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
+      console.log('🗑️ Cleared localStorage');
+
+      // Show success message
+      setShowLogoutSuccess(true);
+      console.log('✅ Logout successful!');
+
+      // Redirect after showing success message
+      setTimeout(() => {
+        navigate('/login', { replace: true });
+      }, 1500);
+
+    } catch (error) {
+      console.error('❌ Error during logout:', error);
+      
+      // Still clear local data and redirect
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
+      
+      // Show success message anyway (client-side logout still works)
+      setShowLogoutSuccess(true);
+      
+      setTimeout(() => {
+        navigate('/login', { replace: true });
+      }, 1500);
+    } finally {
+      setLoggingOut(false);
+    }
+  };
 
   return (
     <SidebarProvider>
@@ -135,7 +190,7 @@ const StudentLayout = ({ children }) => {
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-56" align="end" forceMount>
+                <DropdownMenuContent className="w-56" align="end" forceMount>
                   <DropdownMenuLabel className="font-normal">
                     <div className="flex flex-col space-y-1">
                       <p className="text-sm font-medium leading-none">Student User</p>
@@ -150,20 +205,45 @@ const StudentLayout = ({ children }) => {
                     <span>Settings</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <a href="/student/profile" className="flex items-center gap-2">
+                    <Link to="/student/profile" className="flex items-center">
                       <User className="mr-2 h-4 w-4" />
                       Profile
-                    </a>
+                    </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem className="text-red-600">
-                    <LogOut className="mr-2 h-4 w-4" />
-                    <span>Log out</span>
+                  <DropdownMenuItem 
+                    className="text-red-600 cursor-pointer"
+                    onClick={handleLogout}
+                    disabled={loggingOut}
+                  >
+                    {loggingOut ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        <span>Logging out...</span>
+                      </>
+                    ) : (
+                      <>
+                        <LogOut className="mr-2 h-4 w-4" />
+                        <span>Log out</span>
+                      </>
+                    )}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
           </header>
+
+          {/* Logout Success Message */}
+          {showLogoutSuccess && (
+            <div className="fixed top-20 right-6 z-50 animate-in slide-in-from-top-5">
+              <Alert className="bg-green-50 border-green-200 text-green-900 shadow-lg">
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                <AlertDescription className="ml-2">
+                  Successfully logged out! Redirecting...
+                </AlertDescription>
+              </Alert>
+            </div>
+          )}
 
           <main className="flex-1">
             <Outlet />

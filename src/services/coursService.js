@@ -1,42 +1,43 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+import axios from "axios";
 
-async function getAllCours() {
-  const response = await fetch(API_BASE_URL + '/cours/getAllCours', {
-    credentials: 'include',
-  });
-  if (!response.ok) throw new Error('Failed to fetch all cours');
-  return await response.json();
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/cours";
+
+// Get all cours
+export async function getAllCours() {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/getAllCours`, { withCredentials: true });
+    return response.data;
+  } catch (error) {
+    throw new Error("Failed to fetch all cours: " + error.message);
+  }
 }
 
-async function getCoursById(id) {
-  const response = await fetch(API_BASE_URL + '/cours/getCoursById/' + id, {
-    credentials: 'include',
-  });
-  if (!response.ok) throw new Error('Failed to fetch cours with id ' + id);
-  return await response.json();
+// Get cours by ID
+export async function getCoursById(id) {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/getCoursById/${id}`, { withCredentials: true });
+    return response.data;
+  } catch (error) {
+    throw new Error("Failed to fetch cours with id " + id + ": " + error.message);
+  }
 }
 
-async function deleteCoursById(id) {
-  const response = await fetch(API_BASE_URL + '/cours/deleteCours/' + id, {
-    method: 'DELETE',
-    credentials: 'include',
-  });
-  if (!response.ok) throw new Error('Failed to delete cours with id ' + id);
-  return await response.json();
+// Delete cours by ID
+export async function deleteCoursById(id) {
+  try {
+    const response = await axios.delete(`${API_BASE_URL}/deleteCours/${id}`, { withCredentials: true });
+    return response.data;
+  } catch (error) {
+    throw new Error("Failed to delete cours with id " + id + ": " + error.message);
+  }
 }
 
-async function deleteAllCours() {
-  const response = await fetch(API_BASE_URL + '/cours/deleteAllCours', {
-    method: 'DELETE',
-    credentials: 'include',
-  });
-  if (!response.ok) throw new Error('Failed to delete all cours');
-  return await response.json();
+// Delete all cours
+export async function deleteAllCours() {
+  try {
+    const response = await axios.delete(`${API_BASE_URL}/deleteAllCours`, { withCredentials: true });
+    return response.data;
+  } catch (error) {
+    throw new Error("Failed to delete all cours: " + error.message);
+  }
 }
-
-export {
-  getAllCours,
-  getCoursById,
-  deleteCoursById,
-  deleteAllCours,
-};

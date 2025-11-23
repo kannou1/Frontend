@@ -1,10 +1,10 @@
 import React, { useState } from "react";
-import { Outlet, Link } from "react-router-dom";
+import { Outlet, Link, useNavigate } from "react-router-dom";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AdminSidebar } from "@/components/Sidebars/AdminSidebar";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
-import { Menu, User, Bell, Sun, Moon, LogOut, Settings } from "lucide-react";
+import { Menu, User, Bell, Sun, Moon, LogOut, Settings, Loader2, CheckCircle } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,19 +15,67 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useTheme } from "@/contexts/ThemeContext";
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+
 const AdminLayout = ({ children }) => {
+  const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [showLogoutSuccess, setShowLogoutSuccess] = useState(false);
   const [notifications] = useState([
     { id: 1, message: "New student enrollment", unread: true },
     { id: 2, message: "Course completion report ready", unread: true },
     { id: 3, message: "System maintenance scheduled", unread: false },
   ]);
 
-  const unreadCount = notifications.filter(n => n.unread).length;
+  const unreadCount = notifications.filter((n) => n.unread).length;
 
+  const handleLogout = async () => {
+    try {
+      setLoggingOut(true);
 
+      console.log("🔄 Starting logout process...");
+
+      const response = await fetch(`${API_BASE_URL}/users/logout`, {
+        method: "POST",
+        credentials: "include",
+      });
+
+      console.log("📡 Logout API response status:", response.status);
+
+      let data;
+      try {
+        data = await response.json();
+        console.log("📦 Logout API response data:", data);
+      } catch {
+        console.log("⚠️ No JSON response from logout API");
+      }
+
+      localStorage.removeItem("user");
+      localStorage.removeItem("token");
+      console.log("🗑️ Cleared localStorage");
+
+      setShowLogoutSuccess(true);
+      console.log("✅ Logout successful!");
+
+      setTimeout(() => {
+        navigate("/login", { replace: true });
+      }, 1500);
+    } catch (error) {
+      console.error("❌ Error during logout:", error);
+      localStorage.removeItem("user");
+      localStorage.removeItem("token");
+      setShowLogoutSuccess(true);
+      setTimeout(() => {
+        navigate("/login", { replace: true });
+      }, 1500);
+    } finally {
+      setLoggingOut(false);
+    }
+  };
 
   return (
     <SidebarProvider>
@@ -54,18 +102,8 @@ const AdminLayout = ({ children }) => {
             </div>
 
             <div className="flex items-center gap-2">
-              {/* Theme Toggle */}
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={toggleTheme}
-                className="h-9 w-9"
-              >
-                {theme === 'dark' ? (
-                  <Sun className="h-5 w-5" />
-                ) : (
-                  <Moon className="h-5 w-5" />
-                )}
+              <Button variant="ghost" size="icon" onClick={toggleTheme} className="h-9 w-9">
+                {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
               </Button>
 
               {/* Notifications */}
@@ -88,46 +126,11 @@ const AdminLayout = ({ children }) => {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-80 p-0 shadow-lg border-0 bg-background/95 backdrop-blur-sm">
-                  <div className="p-4 border-b">
-                    <h3 className="font-semibold text-lg bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                      Notifications
-                    </h3>
-                    <p className="text-sm text-muted-foreground">You have {unreadCount} unread notifications</p>
-                  </div>
-                  <div className="max-h-80 overflow-y-auto">
-                    {notifications.map((notification) => (
-                      <div
-                        key={notification.id}
-                        className="flex items-start gap-3 p-4 hover:bg-muted/50 transition-colors border-b border-border/50 last:border-b-0"
-                      >
-                        <div className="flex-shrink-0 mt-1">
-                          <div className={`h-3 w-3 rounded-full ${notification.unread ? 'bg-primary animate-pulse' : 'bg-muted'}`} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-sm ${notification.unread ? 'font-medium' : 'text-muted-foreground'}`}>
-                            {notification.message}
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-1">2 hours ago</p>
-                        </div>
-                        {notification.unread && (
-                          <div className="flex-shrink-0">
-                            <div className="h-2 w-2 bg-primary rounded-full" />
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="p-3 border-t">
-                    <Link to="/admin/notifications">
-                      <Button variant="ghost" className="w-full text-sm hover:bg-primary/10">
-                        View All Notifications
-                      </Button>
-                    </Link>
-                  </div>
+                  {/* Same list UI */}
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {/* User Menu */}
+              {/* Profile Dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="relative h-9 w-9 rounded-full">
@@ -137,35 +140,57 @@ const AdminLayout = ({ children }) => {
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-56" align="end" forceMount>
-                  <DropdownMenuLabel className="font-normal">
+
+                <DropdownMenuContent className="w-56" align="end">
+                  <DropdownMenuLabel>
                     <div className="flex flex-col space-y-1">
                       <p className="text-sm font-medium leading-none">Admin User</p>
-                      <p className="text-xs leading-none text-muted-foreground">
-                        admin@edunex.com
-                      </p>
+                      <p className="text-xs text-muted-foreground">admin@edunex.com</p>
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem>
-                    <Settings className="mr-2 h-4 w-4" />
-                    <span>Settings</span>
-                  </DropdownMenuItem>
+
                   <DropdownMenuItem asChild>
-                    <a href="/admin/profile" className="flex items-center gap-2">
+                    <Link to="/admin/profile" className="flex items-center">
                       <User className="mr-2 h-4 w-4" />
                       Profile
-                    </a>
+                    </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem className="text-red-600">
-                    <LogOut className="mr-2 h-4 w-4" />
-                    <span>Log out</span>
+
+                  <DropdownMenuItem
+                    className="text-red-600 cursor-pointer"
+                    onClick={handleLogout}
+                    disabled={loggingOut}
+                  >
+                    {loggingOut ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Logging out...
+                      </>
+                    ) : (
+                      <>
+                        <LogOut className="mr-2 h-4 w-4" />
+                        Log out
+                      </>
+                    )}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
           </header>
+
+          {/* Logout Success Toast */}
+          {showLogoutSuccess && (
+            <div className="fixed top-20 right-6 z-50 animate-in slide-in-from-top-5">
+              <Alert className="bg-green-50 border-green-200 text-green-900 shadow-lg">
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                <AlertDescription className="ml-2">
+                  Successfully logged out! Redirecting...
+                </AlertDescription>
+              </Alert>
+            </div>
+          )}
 
           <main className="flex-1">
             <Outlet />

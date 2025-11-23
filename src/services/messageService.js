@@ -1,42 +1,32 @@
+import axios from 'axios';
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+const API_URL = `${API_BASE_URL}/message`;
 
-async function getConversation(userId1, userId2) {
-  const response = await fetch(API_BASE_URL + '/message/conversation/' + userId1 + '/' + userId2, {
-    credentials: 'include',
+// Get conversation between two users
+export async function getConversation(userId1, userId2) {
+  return await axios.get(`${API_URL}/conversation/${userId1}/${userId2}`, {
+    withCredentials: true,
   });
-  if (!response.ok) throw new Error('Failed to fetch conversation');
-  return await response.json();
 }
 
-async function getAllMessages() {
-  const response = await fetch(API_BASE_URL + '/message/all', {
-    credentials: 'include',
+// Get all messages
+export async function getAllMessages() {
+  return await axios.get(`${API_URL}/all`, {
+    withCredentials: true,
   });
-  if (!response.ok) throw new Error('Failed to fetch all messages');
-  return await response.json();
 }
 
-async function deleteMessageById(id) {
-  const response = await fetch(API_BASE_URL + '/message/delete/' + id, {
-    method: 'DELETE',
-    credentials: 'include',
+// Delete message by ID
+export async function deleteMessageById(id) {
+  return await axios.delete(`${API_URL}/delete/${id}`, {
+    withCredentials: true,
   });
-  if (!response.ok) throw new Error('Failed to delete message with id ' + id);
-  return await response.json();
 }
 
-async function deleteAllMessages() {
-  const response = await fetch(API_BASE_URL + '/message/deleteAll', {
-    method: 'DELETE',
-    credentials: 'include',
+// Delete all messages
+export async function deleteAllMessages() {
+  return await axios.delete(`${API_URL}/deleteAll`, {
+    withCredentials: true,
   });
-  if (!response.ok) throw new Error('Failed to delete all messages');
-  return await response.json();
 }
-
-export {
-  getConversation,
-  getAllMessages,
-  deleteMessageById,
-  deleteAllMessages,
-};

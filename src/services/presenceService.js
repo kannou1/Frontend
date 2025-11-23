@@ -1,42 +1,32 @@
+import axios from 'axios';
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+const API_URL = `${API_BASE_URL}/presence`;
 
-async function getAllPresence() {
-  const response = await fetch(API_BASE_URL + '/presence/getAllPresence', {
-    credentials: 'include',
+// Get all presence
+export async function getAllPresence() {
+  return await axios.get(`${API_URL}/getAllPresence`, {
+    withCredentials: true,
   });
-  if (!response.ok) throw new Error('Failed to fetch all presence');
-  return await response.json();
 }
 
-async function getPresenceById(id) {
-  const response = await fetch(API_BASE_URL + '/presence/getPresenceById/' + id, {
-    credentials: 'include',
+// Get presence by ID
+export async function getPresenceById(id) {
+  return await axios.get(`${API_URL}/getPresenceById/${id}`, {
+    withCredentials: true,
   });
-  if (!response.ok) throw new Error('Failed to fetch presence with id ' + id);
-  return await response.json();
 }
 
-async function deletePresenceById(id) {
-  const response = await fetch(API_BASE_URL + '/presence/deletePresence/' + id, {
-    method: 'DELETE',
-    credentials: 'include',
+// Delete presence by ID
+export async function deletePresenceById(id) {
+  return await axios.delete(`${API_URL}/deletePresence/${id}`, {
+    withCredentials: true,
   });
-  if (!response.ok) throw new Error('Failed to delete presence with id ' + id);
-  return await response.json();
 }
 
-async function deleteAllPresence() {
-  const response = await fetch(API_BASE_URL + '/presence/deleteAllPresence', {
-    method: 'DELETE',
-    credentials: 'include',
+// Delete all presence
+export async function deleteAllPresence() {
+  return await axios.delete(`${API_URL}/deleteAllPresence`, {
+    withCredentials: true,
   });
-  if (!response.ok) throw new Error('Failed to delete all presence');
-  return await response.json();
 }
-
-export {
-  getAllPresence,
-  getPresenceById,
-  deletePresenceById,
-  deleteAllPresence,
-};

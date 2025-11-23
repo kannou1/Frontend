@@ -1,42 +1,32 @@
+import axios from 'axios';
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+const API_URL = `${API_BASE_URL}/note`;
 
-async function getAllNotes() {
-  const response = await fetch(API_BASE_URL + '/note/getAllNotes', {
-    credentials: 'include',
+// Get all notes
+export async function getAllNotes() {
+  return await axios.get(`${API_URL}/getAllNotes`, {
+    withCredentials: true,
   });
-  if (!response.ok) throw new Error('Failed to fetch all notes');
-  return await response.json();
 }
 
-async function getNoteById(id) {
-  const response = await fetch(API_BASE_URL + '/note/getNoteById/' + id, {
-    credentials: 'include',
+// Get note by ID
+export async function getNoteById(id) {
+  return await axios.get(`${API_URL}/getNoteById/${id}`, {
+    withCredentials: true,
   });
-  if (!response.ok) throw new Error('Failed to fetch note with id ' + id);
-  return await response.json();
 }
 
-async function deleteNoteById(id) {
-  const response = await fetch(API_BASE_URL + '/note/deleteNote/' + id, {
-    method: 'DELETE',
-    credentials: 'include',
+// Delete note by ID
+export async function deleteNoteById(id) {
+  return await axios.delete(`${API_URL}/deleteNote/${id}`, {
+    withCredentials: true,
   });
-  if (!response.ok) throw new Error('Failed to delete note with id ' + id);
-  return await response.json();
 }
 
-async function deleteAllNotes() {
-  const response = await fetch(API_BASE_URL + '/note/deleteAllNotes', {
-    method: 'DELETE',
-    credentials: 'include',
+// Delete all notes
+export async function deleteAllNotes() {
+  return await axios.delete(`${API_URL}/deleteAllNotes`, {
+    withCredentials: true,
   });
-  if (!response.ok) throw new Error('Failed to delete all notes');
-  return await response.json();
 }
-
-export {
-  getAllNotes,
-  getNoteById,
-  deleteNoteById,
-  deleteAllNotes,
-};

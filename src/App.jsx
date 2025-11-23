@@ -8,6 +8,7 @@ import { ThemeProvider } from "@/contexts/ThemeContext";
 
 // Auth
 import Login from "./pages/Auth/Login";
+import Forget from "./pages/Auth/Forget";
 
 // Admin
 import AdminLayout from "./pages/Admin/Layout";
@@ -59,6 +60,7 @@ const App = () => (
           {/* First page / login */}
           <Route path="/" element={<Login />} />
           <Route path="/login" element={<Login />} />
+           <Route path="/forget" element={<Forget />} />
 
           {/* Student routes */}
           <Route path="/student" element={<StudentLayout />}>
@@ -91,8 +93,7 @@ const App = () => (
           {/* Admin routes */}
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<AdminDashboard />} />
-            <Route path="students" element={<AdminUsers />} />
-            <Route path="teachers" element={<AdminUsers />} />
+            <Route path="users" element={<AdminUsers />} />
             <Route path="courses" element={<AdminCourses />} />
             <Route path="reports" element={<AdminReports />} />
             <Route path="settings" element={<AdminSettings />} />

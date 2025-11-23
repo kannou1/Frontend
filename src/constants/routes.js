@@ -5,8 +5,7 @@ export const ROUTES = {
 
   // Admin routes
   ADMIN_DASHBOARD: '/admin/dashboard',
-  ADMIN_STUDENTS: '/admin/students',
-  ADMIN_TEACHERS: '/admin/teachers',
+  ADMIN_USERS: '/admin/users',
   ADMIN_COURSES: '/admin/courses',
   ADMIN_REPORTS: '/admin/reports',
   ADMIN_SETTINGS: '/admin/settings',

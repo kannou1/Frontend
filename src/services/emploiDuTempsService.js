@@ -1,42 +1,32 @@
+import axios from 'axios';
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+const API_URL = `${API_BASE_URL}/emploiDuTemps`;
 
-async function getAllEmploiDuTemps() {
-  const response = await fetch(API_BASE_URL + '/emploiDuTemps/getAllEmploiDuTemps', {
-    credentials: 'include',
+// Get all emploi du temps
+export async function getAllEmploiDuTemps() {
+  return await axios.get(`${API_URL}/getAllEmploiDuTemps`, {
+    withCredentials: true,
   });
-  if (!response.ok) throw new Error('Failed to fetch all emploi du temps');
-  return await response.json();
 }
 
-async function getEmploiDuTempsById(id) {
-  const response = await fetch(API_BASE_URL + '/emploiDuTemps/getEmploiDuTempsById/' + id, {
-    credentials: 'include',
+// Get emploi du temps by ID
+export async function getEmploiDuTempsById(id) {
+  return await axios.get(`${API_URL}/getEmploiDuTempsById/${id}`, {
+    withCredentials: true,
   });
-  if (!response.ok) throw new Error('Failed to fetch emploi du temps with id ' + id);
-  return await response.json();
 }
 
-async function deleteEmploiDuTempsById(id) {
-  const response = await fetch(API_BASE_URL + '/emploiDuTemps/deleteEmploiDuTemps/' + id, {
-    method: 'DELETE',
-    credentials: 'include',
+// Delete emploi du temps by ID
+export async function deleteEmploiDuTempsById(id) {
+  return await axios.delete(`${API_URL}/deleteEmploiDuTemps/${id}`, {
+    withCredentials: true,
   });
-  if (!response.ok) throw new Error('Failed to delete emploi du temps with id ' + id);
-  return await response.json();
 }
 
-async function deleteAllEmploiDuTemps() {
-  const response = await fetch(API_BASE_URL + '/emploiDuTemps/deleteAllEmploiDuTemps', {
-    method: 'DELETE',
-    credentials: 'include',
+// Delete all emploi du temps
+export async function deleteAllEmploiDuTemps() {
+  return await axios.delete(`${API_URL}/deleteAllEmploiDuTemps`, {
+    withCredentials: true,
   });
-  if (!response.ok) throw new Error('Failed to delete all emploi du temps');
-  return await response.json();
 }
-
-export {
-  getAllEmploiDuTemps,
-  getEmploiDuTempsById,
-  deleteEmploiDuTempsById,
-  deleteAllEmploiDuTemps,
-};

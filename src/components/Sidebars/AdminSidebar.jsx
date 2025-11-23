@@ -30,8 +30,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 const navItems = [
   { path: "", label: "Dashboard", icon: LayoutDashboard },
-  { path: "students", label: "Students", icon: Users },
-  { path: "teachers", label: "Teachers", icon: Users },
+  { path: "users", label: "users", icon: Users },
   { path: "courses", label: "Courses", icon: BookOpen },
   { path: "reports", label: "Reports", icon: BarChart3 },
   { path: "settings", label: "Settings", icon: Settings },

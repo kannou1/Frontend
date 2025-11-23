@@ -1,42 +1,32 @@
+import axios from 'axios';
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+const API_URL = `${API_BASE_URL}/notification`;
 
-async function getAllNotifications() {
-  const response = await fetch(API_BASE_URL + '/notification/getAllNotifications', {
-    credentials: 'include',
+// Get all notifications
+export async function getAllNotifications() {
+  return await axios.get(`${API_URL}/getAllNotifications`, {
+    withCredentials: true,
   });
-  if (!response.ok) throw new Error('Failed to fetch all notifications');
-  return await response.json();
 }
 
-async function getNotificationById(id) {
-  const response = await fetch(API_BASE_URL + '/notification/getNotificationById/' + id, {
-    credentials: 'include',
+// Get notification by ID
+export async function getNotificationById(id) {
+  return await axios.get(`${API_URL}/getNotificationById/${id}`, {
+    withCredentials: true,
   });
-  if (!response.ok) throw new Error('Failed to fetch notification with id ' + id);
-  return await response.json();
 }
 
-async function deleteNotificationById(id) {
-  const response = await fetch(API_BASE_URL + '/notification/deleteNotification/' + id, {
-    method: 'DELETE',
-    credentials: 'include',
+// Delete notification by ID
+export async function deleteNotificationById(id) {
+  return await axios.delete(`${API_URL}/deleteNotification/${id}`, {
+    withCredentials: true,
   });
-  if (!response.ok) throw new Error('Failed to delete notification with id ' + id);
-  return await response.json();
 }
 
-async function deleteAllNotifications() {
-  const response = await fetch(API_BASE_URL + '/notification/deleteAllNotifications', {
-    method: 'DELETE',
-    credentials: 'include',
+// Delete all notifications
+export async function deleteAllNotifications() {
+  return await axios.delete(`${API_URL}/deleteAllNotifications`, {
+    withCredentials: true,
   });
-  if (!response.ok) throw new Error('Failed to delete all notifications');
-  return await response.json();
 }
-
-export {
-  getAllNotifications,
-  getNotificationById,
-  deleteNotificationById,
-  deleteAllNotifications,
-};
