@@ -44,17 +44,38 @@ export function StudentSidebar() {
   return (
     <Sidebar collapsible="icon" className="border-r transition-all duration-300 ease-in-out">
       <SidebarHeader className="h-16 border-b border-border/50 bg-gradient-to-br from-sidebar to-sidebar/80 transition-all duration-300 flex items-center">
-        <Link to="/" className={`flex items-center gap-3 group overflow-hidden w-full ${isCollapsed ? 'px-3 justify-center' : 'px-4'}`}>
-          <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary via-primary to-secondary flex items-center justify-center flex-shrink-0 shadow-lg group-hover:shadow-xl transition-all duration-300 group-hover:scale-105">
-            <span className="text-base font-bold text-white">E</span>
-          </div>
-          <div className={`flex flex-col transition-all duration-300 ${isCollapsed ? 'opacity-0 w-0 hidden' : 'opacity-100 w-auto'}`}>
-            <span className="text-base font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent whitespace-nowrap">
-              EduNex
-            </span>
-            <span className="text-[10px] text-muted-foreground whitespace-nowrap">Student Portal</span>
-          </div>
-        </Link>
+         <Link
+                  to="/Student/"
+                  className={`flex items-center w-full transition-all duration-200 ${
+                    isCollapsed ? "justify-center px-3" : "gap-3 px-4"
+                  }`}
+                >
+                  {/* FIXED PERFECT COLLAPSED LOGO */}
+               <div
+          className={`
+            flex items-center justify-center 
+            rounded-xl shadow-lg 
+            bg-gradient-to-br from-primary to-secondary
+            transition-all duration-200
+            w-9 h-9 flex-shrink-0
+          `}
+        >
+          <span className="text-base font-bold text-white select-none">E</span>
+        </div>
+        
+                 
+        
+                  {!isCollapsed && (
+                    <div className="flex flex-col transition-opacity duration-200">
+                      <span className="text-base font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+                        EduNex
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">
+                        student Portal
+                      </span>
+                    </div>
+                  )}
+                </Link>
       </SidebarHeader>
 
       <SidebarContent className={`py-4 transition-all duration-300 ${isCollapsed ? 'px-1' : 'px-2'}`}>

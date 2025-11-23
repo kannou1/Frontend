@@ -17,6 +17,7 @@ import AdminCourses from "./pages/Admin/Courses";
 import AdminReports from "./pages/Admin/Reports";
 import AdminSettings from "./pages/Admin/Settings";
 import AdminMessages from "./pages/Admin/Messages";
+import AdminProfile from "./pages/Admin/Profile";
 import AdminNotifications from "./pages/Admin/Notifications";
 
 // Teacher
@@ -28,6 +29,7 @@ import TeacherGrading from "./pages/Teacher/Grading";
 import TeacherSchedule from "./pages/Teacher/Schedule";
 import TeacherStudents from "./pages/Teacher/Students";
 import TeacherMessages from "./pages/Teacher/Messages";
+import TeacherProfile from "./pages/Teacher/Profile";
 import TeacherNotifications from "./pages/Teacher/Notifications";
 
 // Student
@@ -40,7 +42,9 @@ import StudentExams from "./pages/Student/Exams";
 import StudentRequests from "./pages/Student/Requests";
 import StudentMessages from "./pages/Student/Messages";
 import StudentNotifications from "./pages/Student/Notifications";
+import StudentProfile from "./pages/Student/Profile";
 import StudentNotFound from "./pages/Student/NotFound";
+
 
 const queryClient = new QueryClient();
 
@@ -66,6 +70,7 @@ const App = () => (
             <Route path="requests" element={<StudentRequests />} />
             <Route path="messages" element={<StudentMessages />} />
             <Route path="notifications" element={<StudentNotifications />} />
+            <Route path="profile" element={<StudentProfile />} />
             <Route path="*" element={<StudentNotFound />} />
           </Route>
 
@@ -79,6 +84,7 @@ const App = () => (
             <Route path="schedule" element={<TeacherSchedule />} />
             <Route path="messages" element={<TeacherMessages />} />
             <Route path="notifications" element={<TeacherNotifications />} />
+            <Route path="profile" element={<TeacherProfile />} />
             <Route path="*" element={<StudentNotFound />} />
           </Route>
 
@@ -92,6 +98,7 @@ const App = () => (
             <Route path="settings" element={<AdminSettings />} />
             <Route path="messages" element={<AdminMessages />} />
             <Route path="notifications" element={<AdminNotifications />} />
+            <Route path="profile" element={<AdminProfile />} />
             <Route path="*" element={<StudentNotFound />} />
           </Route>
 

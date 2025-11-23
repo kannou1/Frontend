@@ -25,10 +25,7 @@ export default function AdminDashboard() {
     { title: 'System Settings', description: 'Configure system preferences', icon: Settings, route: ROUTES.ADMIN_SETTINGS },
   ];
 
-  const handleLogout = async () => {
-    await signOut();
-    navigate(ROUTES.LOGIN);
-  };
+  
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -40,10 +37,7 @@ export default function AdminDashboard() {
           </h1>
           <p className="text-muted-foreground mt-1">Welcome back, Administrator</p>
         </div>
-        <Button variant="outline" onClick={handleLogout}>
-          <LogOut className="h-4 w-4 mr-2" />
-          Logout
-        </Button>
+        
       </div>
 
       {/* Stats Grid */}
