@@ -11,6 +11,7 @@ import {
   Users,
   Settings,
   BarChart3,
+  NotebookPen // You can use any icon for Classes
 } from "lucide-react";
 
 import {
@@ -28,56 +29,72 @@ import {
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
+// ADDED: Classes nav entry - use any appropriate icon (here BookOpen re-used)
 const navItems = [
   { path: "", label: "Dashboard", icon: LayoutDashboard },
-  { path: "users", label: "users", icon: Users },
-  { path: "courses", label: "Courses", icon: BookOpen },
+  { path: "users", label: "Users", icon: Users },
+  { path: "classes", label: "Classes", icon: BookOpen },
+  { path: "courses", label: "Courses", icon: NotebookPen },
   { path: "reports", label: "Reports", icon: BarChart3 },
   { path: "settings", label: "Settings", icon: Settings },
   { path: "messages", label: "Messages", icon: MessageSquare },
-  { path: "notifications", label: "Notifications", icon: Bell },
+  { path: "notifications", label: "Notifications", icon: Bell }
 ];
+
+// Get user info from localStorage for footer display
+const getUserInfo = () => {
+  try {
+    if (typeof window !== "undefined") {
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      return {
+        name: user.prenom
+          ? `${user.prenom} ${user.nom ?? ""}`.trim()
+          : user.nom ?? "Unknown User",
+        email: user.email ?? "",
+        initials:
+          (user.prenom?.[0] ?? "U") + (user.nom?.[0] ?? "")
+      };
+    }
+  } catch {}
+  return { name: "Unknown User", email: "", initials: "U" };
+};
 
 export function AdminSidebar() {
   const location = useLocation();
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
+  const { name, email, initials } = getUserInfo();
 
   return (
     <Sidebar collapsible="icon" className="border-r transition-all duration-150 ease-out">
       <SidebarHeader className="h-16 border-b border-border/50 bg-gradient-to-br from-sidebar to-sidebar/80 transition-all duration-150 ease-out flex items-center">
         <Link
-                 to="/admin/"
-                 className={`flex items-center w-full transition-all duration-200 ${
-                   isCollapsed ? "justify-center px-3" : "gap-3 px-4"
-                 }`}
-               >
-                 {/* FIXED PERFECT COLLAPSED LOGO */}
-              <div
-         className={`
-           flex items-center justify-center 
-           rounded-xl shadow-lg 
-           bg-gradient-to-br from-primary to-secondary
-           transition-all duration-200
-           w-9 h-9 flex-shrink-0
-         `}
-       >
-         <span className="text-base font-bold text-white select-none">E</span>
-       </div>
-       
-                
-       
-                 {!isCollapsed && (
-                   <div className="flex flex-col transition-opacity duration-200">
-                     <span className="text-base font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                       EduNex
-                     </span>
-                     <span className="text-[10px] text-muted-foreground">
-                       admin Portal
-                     </span>
-                   </div>
-                 )}
-               </Link>
+          to="/admin/"
+          className={`flex items-center w-full transition-all duration-200 ${
+            isCollapsed ? "justify-center px-3" : "gap-3 px-4"
+          }`}
+        >
+          {/* Logo */}
+          <div className="
+            flex items-center justify-center 
+            rounded-xl shadow-lg 
+            bg-gradient-to-br from-primary to-secondary
+            transition-all duration-200
+            w-9 h-9 flex-shrink-0
+          ">
+            <span className="text-base font-bold text-white select-none">E</span>
+          </div>
+          {!isCollapsed && (
+            <div className="flex flex-col transition-opacity duration-200">
+              <span className="text-base font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+                EduNex
+              </span>
+              <span className="text-[10px] text-muted-foreground">
+                admin Portal
+              </span>
+            </div>
+          )}
+        </Link>
       </SidebarHeader>
 
       <SidebarContent
@@ -153,17 +170,17 @@ export function AdminSidebar() {
         >
           <Avatar className="h-9 w-9 border-2 border-primary/20 flex-shrink-0 transition-all duration-150">
             <AvatarFallback className="bg-gradient-to-br from-primary to-secondary text-white font-semibold">
-              JD
+              {initials}
             </AvatarFallback>
           </Avatar>
 
           {!isCollapsed && (
             <div className="flex flex-col flex-1 min-w-0">
               <span className="text-sm font-semibold truncate whitespace-nowrap">
-                John Doe
+                {name}
               </span>
               <span className="text-xs text-muted-foreground truncate whitespace-nowrap">
-                admin@edunex.com
+                {email}
               </span>
             </div>
           )}

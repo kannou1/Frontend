@@ -20,6 +20,7 @@ import AdminSettings from "./pages/Admin/Settings";
 import AdminMessages from "./pages/Admin/Messages";
 import AdminProfile from "./pages/Admin/Profile";
 import AdminNotifications from "./pages/Admin/Notifications";
+import AdminClasses from "./pages/Admin/classes";
 
 // Teacher
 import TeacherLayout from "./pages/Teacher/Layout";
@@ -95,6 +96,7 @@ const App = () => (
             <Route index element={<AdminDashboard />} />
             <Route path="users" element={<AdminUsers />} />
             <Route path="courses" element={<AdminCourses />} />
+            <Route path="classes" element={<AdminClasses />} />
             <Route path="reports" element={<AdminReports />} />
             <Route path="settings" element={<AdminSettings />} />
             <Route path="messages" element={<AdminMessages />} />

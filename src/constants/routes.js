@@ -9,6 +9,8 @@ export const ROUTES = {
   ADMIN_COURSES: '/admin/courses',
   ADMIN_REPORTS: '/admin/reports',
   ADMIN_SETTINGS: '/admin/settings',
+  ADMIN_CLASSES: '/admin/classes',
+
 
   // Teacher routes
   TEACHER_DASHBOARD: '/teacher/dashboard',
