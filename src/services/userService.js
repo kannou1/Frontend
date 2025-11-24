@@ -10,9 +10,16 @@ export const createUser = async (userData) => {
   if (userData.role === "admin") endpoint = `${API_URL}/create-Admin`;
   if (userData.role === "enseignant") endpoint = `${API_URL}/create-Enseignant`;
 
-  // Use FormData to support future file uploads
+  // Use FormData to support file uploads
   const formData = new FormData();
-  Object.keys(userData).forEach((key) => formData.append(key, userData[key]));
+  Object.keys(userData).forEach((key) => {
+    // Handle arrays (like classes for enseignant)
+    if (Array.isArray(userData[key])) {
+      userData[key].forEach((item) => formData.append(key, item));
+    } else {
+      formData.append(key, userData[key]);
+    }
+  });
 
   const res = await fetch(endpoint, {
     method: "POST",
