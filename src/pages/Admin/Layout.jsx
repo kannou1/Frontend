@@ -21,30 +21,10 @@ import { useTheme } from "@/contexts/ThemeContext";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
 const exampleNotifications = [
-  {
-    id: 1,
-    message: "New student <b>Sara Johnson</b> enrolled",
-    date: "Just now",
-    unread: true,
-  },
-  {
-    id: 2,
-    message: "Class <b>3A Informatique</b> schedule updated",
-    date: "10 min ago",
-    unread: true,
-  },
-  {
-    id: 3,
-    message: "Course completion report is ready",
-    date: "Today, 09:05",
-    unread: false,
-  },
-  {
-    id: 4,
-    message: "System maintenance scheduled on 26 Nov",
-    date: "Yesterday",
-    unread: false,
-  },
+  { id: 1, message: "New student <b>Sara Johnson</b> enrolled", date: "Just now", unread: true },
+  { id: 2, message: "Class <b>3A Informatique</b> schedule updated", date: "10 min ago", unread: true },
+  { id: 3, message: "Course completion report is ready", date: "Today, 09:05", unread: false },
+  { id: 4, message: "System maintenance scheduled on 26 Nov", date: "Yesterday", unread: false },
 ];
 
 const AdminLayout = ({ children }) => {
@@ -65,7 +45,10 @@ const AdminLayout = ({ children }) => {
     ? `${storedUser.prenom} ${storedUser.nom ?? ""}`.trim()
     : storedUser.nom ?? "";
   const userEmail = storedUser.email ?? "";
-  const avatarSrc = storedUser.image_User || "/placeholder-avatar.jpg";
+  // CORRECTED - Use real user image if exists
+  const avatarSrc = storedUser.image_User
+    ? `${API_BASE_URL}/images/${storedUser.image_User}`
+    : "/placeholder-avatar.jpg";
   const avatarFallback = (storedUser.prenom?.[0] ?? "U") + (storedUser.nom?.[0] ?? "");
 
   const handleLogout = async () => {
@@ -230,7 +213,6 @@ const AdminLayout = ({ children }) => {
               </DropdownMenu>
             </div>
           </header>
-
           {showLogoutSuccess && (
             <div className="fixed top-20 right-6 z-50 animate-in slide-in-from-top-5">
               <Alert className="bg-green-50 border-green-200 text-green-900 shadow-lg">
@@ -241,7 +223,6 @@ const AdminLayout = ({ children }) => {
               </Alert>
             </div>
           )}
-
           <main className="flex-1">
             <Outlet />
           </main>
