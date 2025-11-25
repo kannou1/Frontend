@@ -1,10 +1,24 @@
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Mail, AlertCircle, CheckCircle2, ArrowLeft, KeyRound, Lock, Sparkles } from 'lucide-react';
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Mail,
+  AlertCircle,
+  CheckCircle2,
+  ArrowLeft,
+  KeyRound,
+  Lock,
+  Sparkles,
+} from "lucide-react";
 
 const API_BASE_URL = "http://localhost:5000";
 const API_URL = `${API_BASE_URL}/users`;
@@ -12,175 +26,184 @@ const API_URL = `${API_BASE_URL}/users`;
 // Service functions
 const forgotPasswordService = async (email) => {
   const response = await fetch(`${API_URL}/forgot-password`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email }),
   });
-  
+
   if (!response.ok) {
     const errorData = await response.json();
-    throw new Error(errorData.message || 'Failed to send reset code');
+    throw new Error(errorData.message || "Failed to send reset code");
   }
-  
+
   return response.json();
 };
 
 const resetPasswordService = async (email, code, newPassword) => {
   const response = await fetch(`${API_URL}/reset-password`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, code, newPassword }),
   });
-  
+
   if (!response.ok) {
     const errorData = await response.json();
-    throw new Error(errorData.message || 'Failed to reset password');
+    throw new Error(errorData.message || "Failed to reset password");
   }
-  
+
   return response.json();
 };
 
 export default function ForgotPasswordFlow() {
   const [step, setStep] = useState(1); // 1: email, 2: code, 3: new password
-  const [email, setEmail] = useState('');
-  const [code, setCode] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
-  const [emailError, setEmailError] = useState('');
-  const [codeError, setCodeError] = useState('');
-  const [passwordError, setPasswordError] = useState('');
+  const [emailError, setEmailError] = useState("");
+  const [codeError, setCodeError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
 
   const validateEmail = () => {
     if (!email.trim()) {
-      setEmailError('Email is required');
+      setEmailError("Email is required");
       return false;
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setEmailError('Invalid email address');
+      setEmailError("Invalid email address");
       return false;
     }
-    setEmailError('');
+    setEmailError("");
     return true;
   };
 
   const validateCode = () => {
     if (!code.trim()) {
-      setCodeError('Verification code is required');
+      setCodeError("Verification code is required");
       return false;
     } else if (code.length !== 8) {
-      setCodeError('Code must be 8 characters');
+      setCodeError("Code must be 8 characters");
       return false;
     }
-    setCodeError('');
+    setCodeError("");
     return true;
   };
 
   const validatePassword = () => {
-    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-    
+    const passwordRegex =
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+
     if (!newPassword) {
-      setPasswordError('Password is required');
+      setPasswordError("Password is required");
       return false;
     } else if (!passwordRegex.test(newPassword)) {
-      setPasswordError('Password must contain at least 8 characters, one uppercase, one lowercase, one number, and one special character');
+      setPasswordError(
+        "Password must contain at least 8 characters, one uppercase, one lowercase, one number, and one special character"
+      );
       return false;
     } else if (newPassword !== confirmPassword) {
-      setPasswordError('Passwords do not match');
+      setPasswordError("Passwords do not match");
       return false;
     }
-    setPasswordError('');
+    setPasswordError("");
     return true;
   };
 
   const handleSendCode = async () => {
-    setError('');
-    setSuccess('');
+    setError("");
+    setSuccess("");
 
     if (!validateEmail()) return;
 
     setLoading(true);
     try {
       const data = await forgotPasswordService(email.trim());
-      setSuccess(data.message || 'Verification code sent! Check your inbox.');
+      setSuccess(data.message || "Verification code sent! Check your inbox.");
       setTimeout(() => {
         setStep(2);
-        setSuccess('');
+        setSuccess("");
       }, 1500);
     } catch (err) {
-      setError(err.message || 'Something went wrong.');
+      setError(err.message || "Something went wrong.");
     } finally {
       setLoading(false);
     }
   };
 
   const handleVerifyCode = async () => {
-    setError('');
-    setSuccess('');
+    setError("");
+    setSuccess("");
 
     if (!validateCode()) return;
 
-    setSuccess('Code verified successfully!');
+    setSuccess("Code verified successfully!");
     setTimeout(() => {
       setStep(3);
-      setSuccess('');
+      setSuccess("");
     }, 1000);
   };
 
   const handleResetPassword = async () => {
-    setError('');
-    setSuccess('');
+    setError("");
+    setSuccess("");
 
     if (!validatePassword()) return;
 
     setLoading(true);
     try {
-      const data = await resetPasswordService(email.trim(), code.trim(), newPassword);
-      setSuccess(data.message || 'Password reset successful!');
+      const data = await resetPasswordService(
+        email.trim(),
+        code.trim(),
+        newPassword
+      );
+      setSuccess(data.message || "Password reset successful!");
       setTimeout(() => {
-        window.location.href = '/login';
+        window.location.href = "/login";
       }, 2000);
     } catch (err) {
-      setError(err.message || 'Something went wrong.');
+      setError(err.message || "Something went wrong.");
     } finally {
       setLoading(false);
     }
   };
 
   const handleBackToLogin = () => {
-    window.location.href = '/login';
+    window.location.href = "/login";
   };
 
   const handleBack = () => {
-    setError('');
-    setSuccess('');
+    setError("");
+    setSuccess("");
     if (step === 2) {
       setStep(1);
-      setCode('');
+      setCode("");
     } else if (step === 3) {
       setStep(2);
-      setNewPassword('');
-      setConfirmPassword('');
+      setNewPassword("");
+      setConfirmPassword("");
     }
   };
 
   const getIcon = () => {
-    if (step === 1) return <Mail className="h-12 w-12 text-white drop-shadow-lg" />;
-    if (step === 2) return <KeyRound className="h-12 w-12 text-white drop-shadow-lg" />;
+    if (step === 1)
+      return <Mail className="h-12 w-12 text-white drop-shadow-lg" />;
+    if (step === 2)
+      return <KeyRound className="h-12 w-12 text-white drop-shadow-lg" />;
     return <Lock className="h-12 w-12 text-white drop-shadow-lg" />;
   };
 
   const getTitle = () => {
-    if (step === 1) return 'Reset Password';
-    if (step === 2) return 'Verify Code';
-    return 'New Password';
+    if (step === 1) return "Reset Password";
+    if (step === 2) return "Verify Code";
+    return "New Password";
   };
 
   const getDescription = () => {
-    if (step === 1) return 'Enter your email to receive a verification code';
-    if (step === 2) return 'Enter the 8-character code sent to your email';
-    return 'Create a strong new password';
+    if (step === 1) return "Enter your email to receive a verification code";
+    if (step === 2) return "Enter the 8-character code sent to your email";
+    return "Create a strong new password";
   };
 
   return (
@@ -232,7 +255,9 @@ export default function ForgotPasswordFlow() {
           {step === 1 && (
             <>
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-slate-300">Email Address</Label>
+                <Label htmlFor="email" className="text-slate-300">
+                  Email Address
+                </Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-3.5 h-5 w-5 text-slate-500" />
                   <Input
@@ -241,7 +266,7 @@ export default function ForgotPasswordFlow() {
                     placeholder="you@example.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSendCode()}
+                    onKeyDown={(e) => e.key === "Enter" && handleSendCode()}
                     className="pl-10 bg-slate-800/50 border-slate-700 text-slate-200 placeholder:text-slate-500"
                     disabled={loading}
                   />
@@ -260,7 +285,7 @@ export default function ForgotPasswordFlow() {
                 className="w-full bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 hover:from-purple-700 hover:via-blue-700 hover:to-cyan-700 text-white shadow-lg shadow-purple-900/50"
               >
                 <Sparkles className="mr-2 h-5 w-5" />
-                {loading ? 'Sending...' : 'Send Verification Code'}
+                {loading ? "Sending..." : "Send Verification Code"}
               </Button>
 
               <Button
@@ -279,7 +304,9 @@ export default function ForgotPasswordFlow() {
           {step === 2 && (
             <>
               <div className="space-y-2">
-                <Label htmlFor="code" className="text-slate-300">Verification Code</Label>
+                <Label htmlFor="code" className="text-slate-300">
+                  Verification Code
+                </Label>
                 <div className="relative">
                   <KeyRound className="absolute left-3 top-3.5 h-5 w-5 text-slate-500" />
                   <Input
@@ -287,8 +314,8 @@ export default function ForgotPasswordFlow() {
                     type="text"
                     placeholder="Enter 8-character code"
                     value={code}
-                    onChange={(e) => setCode(e.target.value.toUpperCase())}
-                    onKeyDown={(e) => e.key === 'Enter' && handleVerifyCode()}
+                    onChange={(e) => setCode(e.target.value)} 
+                    onKeyDown={(e) => e.key === "Enter" && handleVerifyCode()}
                     className="pl-10 font-mono text-lg tracking-wider bg-slate-800/50 border-slate-700 text-slate-200 placeholder:text-slate-500"
                     maxLength={8}
                     disabled={loading}
@@ -327,7 +354,9 @@ export default function ForgotPasswordFlow() {
           {step === 3 && (
             <>
               <div className="space-y-2">
-                <Label htmlFor="newPassword" className="text-slate-300">New Password</Label>
+                <Label htmlFor="newPassword" className="text-slate-300">
+                  New Password
+                </Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-3.5 h-5 w-5 text-slate-500" />
                   <Input
@@ -343,7 +372,9 @@ export default function ForgotPasswordFlow() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="confirmPassword" className="text-slate-300">Confirm Password</Label>
+                <Label htmlFor="confirmPassword" className="text-slate-300">
+                  Confirm Password
+                </Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-3.5 h-5 w-5 text-slate-500" />
                   <Input
@@ -352,7 +383,9 @@ export default function ForgotPasswordFlow() {
                     placeholder="Confirm new password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleResetPassword()}
+                    onKeyDown={(e) =>
+                      e.key === "Enter" && handleResetPassword()
+                    }
                     className="pl-10 bg-slate-800/50 border-slate-700 text-slate-200 placeholder:text-slate-500"
                     disabled={loading}
                   />
@@ -364,7 +397,8 @@ export default function ForgotPasswordFlow() {
                   </p>
                 )}
                 <p className="text-xs text-slate-500">
-                  Must contain 8+ characters, uppercase, lowercase, number, and special character
+                  Must contain 8+ characters, uppercase, lowercase, number, and
+                  special character
                 </p>
               </div>
 
@@ -374,7 +408,7 @@ export default function ForgotPasswordFlow() {
                 className="w-full bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 hover:from-purple-700 hover:via-blue-700 hover:to-cyan-700 text-white shadow-lg shadow-purple-900/50"
               >
                 <Sparkles className="mr-2 h-5 w-5" />
-                {loading ? 'Resetting...' : 'Reset Password'}
+                {loading ? "Resetting..." : "Reset Password"}
               </Button>
 
               <Button

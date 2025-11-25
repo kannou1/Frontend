@@ -51,6 +51,9 @@ export const getEtudiants = () =>
 export const getUserById = (id) =>
   axios.get(`${API_URL}/getUserById/${id}`, { withCredentials: true });
 
+export const getUserAuth = () =>
+  axios.get(`${API_URL}/me`, { withCredentials: true });
+
 // ------------------- DELETE USERS -------------------
 export const deleteUserById = (id) =>
   axios.delete(`${API_URL}/delete/${id}`, { withCredentials: true });

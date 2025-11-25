@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Outlet, Link, useNavigate } from "react-router-dom";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { TeacherSidebar } from "@/components/Sidebars/TeacherSidebar";
@@ -16,6 +16,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useTheme } from "@/contexts/ThemeContext";
+import { getUserAuth } from "@/services/userService";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
@@ -23,6 +24,7 @@ const TeacherLayout = () => {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
   const [loggingOut, setLoggingOut] = useState(false);
+  const [teacher, setTeacher] = useState(null);
   const [notifications] = useState([
     { id: 1, message: "New assignment submitted", unread: true },
     { id: 2, message: "Grade submission deadline approaching", unread: true },
@@ -30,6 +32,32 @@ const TeacherLayout = () => {
   ]);
 
   const unreadCount = notifications.filter(n => n.unread).length;
+
+  // Fetch connected teacher info
+  useEffect(() => {
+    const fetchTeacher = async () => {
+      try {
+        const response = await getUserAuth();
+        const userData = response.data || response;
+        setTeacher(userData);
+      } catch (error) {
+        console.error("Error fetching teacher data:", error);
+      }
+    };
+    fetchTeacher();
+  }, []);
+
+  const getInitials = () => {
+    if (!teacher) return "TC";
+    const first = teacher.prenom?.[0]?.toUpperCase() || "";
+    const last = teacher.nom?.[0]?.toUpperCase() || "";
+    return first + last || "TC";
+  };
+
+  const getFullName = () => {
+    if (!teacher) return "Teacher User";
+    return `${teacher.prenom || ""} ${teacher.nom || ""}`.trim() || "Teacher User";
+  };
 
   const handleLogout = async () => {
     try {
@@ -159,13 +187,20 @@ const TeacherLayout = () => {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {/* User menu */}
+              {/* User menu - Connected Teacher Info */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="h-9 w-9 rounded-full p-0">
-                    <Avatar className="h-9 w-9">
-                      <AvatarImage src="/placeholder-avatar.jpg" alt="Teacher" />
-                      <AvatarFallback>TC</AvatarFallback>
+                    <Avatar className="h-9 w-9 border-2 border-primary/20">
+                      {teacher?.image_User ? (
+                        <AvatarImage 
+                          src={`${API_BASE_URL}/images/${teacher.image_User}`}
+                          alt={getFullName()}
+                        />
+                      ) : null}
+                      <AvatarFallback className="bg-gradient-to-br from-primary to-secondary text-white font-semibold">
+                        {getInitials()}
+                      </AvatarFallback>
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
@@ -173,9 +208,11 @@ const TeacherLayout = () => {
                 <DropdownMenuContent className="w-56" align="end" forceMount>
                   <DropdownMenuLabel className="font-normal">
                     <div className="flex flex-col space-y-1">
-                      <p className="text-sm font-medium leading-none">Teacher User</p>
+                      <p className="text-sm font-medium leading-none">
+                        {getFullName()}
+                      </p>
                       <p className="text-xs leading-none text-muted-foreground">
-                        teacher@edunex.com
+                        {teacher?.email || "teacher@edunex.com"}
                       </p>
                     </div>
                   </DropdownMenuLabel>

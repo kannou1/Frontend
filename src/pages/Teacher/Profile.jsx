@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { User, Mail, Phone, Calendar, Briefcase, Camera, Save, X, Lock, Bell, Trash2, BookOpen, Users, Clock, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
+import { User, Mail, Loader2, Camera, Save, X, Lock, Bell, Trash2, BookOpen, Users, Clock, Briefcase, CheckCircle2, XCircle, AlertCircle, Eye, EyeOff } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -21,30 +21,21 @@ import {
   Alert,
   AlertDescription,
 } from "@/components/ui/alert";
+import { getUserAuth } from "@/services/userService";
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
 export default function TeacherProfile() {
-  const [formData, setFormData] = useState({
-    prenom: "Leila",
-    nom: "Trabelsi",
-    email: "leila.trabelsi@edunex.com",
-    role: "enseignant",
-    image_User: null,
-    NumTel: "+216 22 456 789",
-    Adresse: "Ariana, Tunisie",
-    datedeNaissance: "1985-03-12",
-    specialite: "Mathématiques",
-    dateEmbauche: "2018-09-01",
-    NumTelEnseignant: "+216 22 456 789",
-    verified: true,
-    Status: true
-  });
-
+  const [formData, setFormData] = useState(null);
+  const [originalData, setOriginalData] = useState(null);
   const [previewImage, setPreviewImage] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
   const [showEmailDialog, setShowEmailDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [toast, setToast] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
   
   const [passwordData, setPasswordData] = useState({
     current: "",
@@ -59,6 +50,32 @@ export default function TeacherProfile() {
     notifications: true,
     updates: false
   });
+
+  // Fetch connected teacher info
+  useEffect(() => {
+    fetchTeacherData();
+  }, []);
+
+  const fetchTeacherData = async () => {
+    try {
+      setLoading(true);
+      const response = await getUserAuth();
+      const userData = response.data || response;
+      
+      setFormData(userData);
+      setOriginalData(userData);
+      
+      // Set preview image if exists
+      if (userData.image_User) {
+        setPreviewImage(`${API_BASE_URL}/images/${userData.image_User}`);
+      }
+    } catch (error) {
+      console.error("Error fetching teacher data:", error);
+      showToast("error", "Failed to load profile data");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const showToast = (type, message) => {
     setToast({ type, message });
@@ -79,9 +96,10 @@ export default function TeacherProfile() {
     }
   };
 
+  // UI-only handlers (no API calls)
   const handleSave = () => {
-    setIsEditing(false);
     showToast("success", "Profile updated successfully!");
+    setIsEditing(false);
   };
 
   const handlePasswordChange = () => {
@@ -119,6 +137,20 @@ export default function TeacherProfile() {
     setShowDeleteDialog(false);
   };
 
+  const handleCancel = () => {
+    setFormData(originalData);
+    setPreviewImage(originalData.image_User ? `${API_BASE_URL}/images/${originalData.image_User}` : null);
+    setIsEditing(false);
+  };
+
+  if (loading || !formData) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Toast Notification */}
@@ -154,7 +186,7 @@ export default function TeacherProfile() {
         <div className="flex gap-2">
           {isEditing ? (
             <>
-              <Button variant="outline" onClick={() => setIsEditing(false)}>
+              <Button variant="outline" onClick={handleCancel}>
                 <X className="mr-2 h-4 w-4" />
                 Cancel
               </Button>
@@ -179,9 +211,9 @@ export default function TeacherProfile() {
             {/* Avatar */}
             <div className="relative group">
               <Avatar className="h-32 w-32 border-4 border-background shadow-xl">
-                <AvatarImage src={previewImage || "/placeholder-avatar.jpg"} alt="Profile" />
+                <AvatarImage src={previewImage} alt="Profile" />
                 <AvatarFallback className="text-3xl font-bold bg-gradient-to-br from-secondary to-accent text-white">
-                  {formData.prenom[0]}{formData.nom[0]}
+                  {formData.prenom?.[0]?.toUpperCase()}{formData.nom?.[0]?.toUpperCase()}
                 </AvatarFallback>
               </Avatar>
               {isEditing && (
@@ -209,9 +241,11 @@ export default function TeacherProfile() {
                   <Briefcase className="h-3 w-3 mr-1" />
                   Teacher
                 </Badge>
-                <Badge variant="outline" className="border-purple-500 text-purple-600">
-                  {formData.specialite}
-                </Badge>
+                {formData.specialite && (
+                  <Badge variant="outline" className="border-purple-500 text-purple-600">
+                    {formData.specialite}
+                  </Badge>
+                )}
                 {formData.verified && (
                   <Badge variant="outline" className="border-green-500 text-green-600">
                     ✓ Verified
@@ -247,7 +281,7 @@ export default function TeacherProfile() {
                   <Input
                     id="prenom"
                     name="prenom"
-                    value={formData.prenom}
+                    value={formData.prenom || ''}
                     onChange={handleChange}
                     disabled={!isEditing}
                   />
@@ -257,7 +291,7 @@ export default function TeacherProfile() {
                   <Input
                     id="nom"
                     name="nom"
-                    value={formData.nom}
+                    value={formData.nom || ''}
                     onChange={handleChange}
                     disabled={!isEditing}
                   />
@@ -270,7 +304,7 @@ export default function TeacherProfile() {
                   id="email"
                   name="email"
                   type="email"
-                  value={formData.email}
+                  value={formData.email || ''}
                   onChange={handleChange}
                   disabled={!isEditing}
                 />
@@ -278,12 +312,12 @@ export default function TeacherProfile() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="NumTel">Phone Number</Label>
+                  <Label htmlFor="NumTelEnseignant">Phone Number</Label>
                   <Input
-                    id="NumTel"
-                    name="NumTel"
+                    id="NumTelEnseignant"
+                    name="NumTelEnseignant"
                     type="tel"
-                    value={formData.NumTel}
+                    value={formData.NumTelEnseignant || ''}
                     onChange={handleChange}
                     disabled={!isEditing}
                   />
@@ -294,7 +328,7 @@ export default function TeacherProfile() {
                     id="datedeNaissance"
                     name="datedeNaissance"
                     type="date"
-                    value={formData.datedeNaissance}
+                    value={formData.datedeNaissance?.split('T')[0] || ''}
                     onChange={handleChange}
                     disabled={!isEditing}
                   />
@@ -306,7 +340,7 @@ export default function TeacherProfile() {
                 <Textarea
                   id="Adresse"
                   name="Adresse"
-                  value={formData.Adresse}
+                  value={formData.Adresse || ''}
                   onChange={handleChange}
                   disabled={!isEditing}
                   rows={3}
@@ -331,9 +365,8 @@ export default function TeacherProfile() {
                   <Input
                     id="specialite"
                     name="specialite"
-                    value={formData.specialite}
+                    value={formData.specialite || 'N/A'}
                     disabled
-                    placeholder="e.g., Mathématiques"
                   />
                 </div>
                 <div className="space-y-2">
@@ -342,21 +375,21 @@ export default function TeacherProfile() {
                     id="dateEmbauche"
                     name="dateEmbauche"
                     type="date"
-                    value={formData.dateEmbauche}
+                    value={formData.dateEmbauche?.split('T')[0] || ''}
                     disabled
                   />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="NumTelEnseignant">Professional Phone</Label>
+                <Label htmlFor="classes">Assigned Classes</Label>
                 <Input
-                  id="NumTelEnseignant"
-                  name="NumTelEnseignant"
-                  type="tel"
-                  value={formData.NumTelEnseignant}
-                  onChange={handleChange}
-                  disabled={!isEditing}
+                  id="classes"
+                  name="classes"
+                  value={formData.classes?.length > 0 
+                    ? `${formData.classes.length} classe${formData.classes.length > 1 ? 's' : ''} assigned`
+                    : 'No classes assigned'}
+                  disabled
                 />
               </div>
 
@@ -398,7 +431,11 @@ export default function TeacherProfile() {
               <Separator />
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Member Since</span>
-                <span className="text-sm font-medium">Sep 2018</span>
+                <span className="text-sm font-medium">
+                  {formData.dateEmbauche 
+                    ? new Date(formData.dateEmbauche).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+                    : 'N/A'}
+                </span>
               </div>
             </CardContent>
           </Card>
@@ -420,7 +457,9 @@ export default function TeacherProfile() {
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Active Courses</p>
-                        <p className="text-2xl font-bold text-secondary">8</p>
+                        <p className="text-2xl font-bold text-secondary">
+                          {formData.classes?.length || 0}
+                        </p>
                       </div>
                     </div>
                     <div className="text-right">
@@ -493,7 +532,6 @@ export default function TeacherProfile() {
                     </DialogDescription>
                   </DialogHeader>
                   
-                  {/* Password Error/Success Message */}
                   {passwordError && (
                     <Alert 
                       className={`border-2 ${
@@ -516,19 +554,28 @@ export default function TeacherProfile() {
                   <div className="space-y-4 py-4">
                     <div className="space-y-2">
                       <Label htmlFor="current-password">Current Password</Label>
-                      <Input
-                        id="current-password"
-                        type="password"
-                        value={passwordData.current}
-                        onChange={(e) => setPasswordData({...passwordData, current: e.target.value})}
-                        placeholder="Enter current password"
-                      />
+                      <div className="relative">
+                        <Input
+                          id="current-password"
+                          type={showPassword ? "text" : "password"}
+                          value={passwordData.current}
+                          onChange={(e) => setPasswordData({...passwordData, current: e.target.value})}
+                          placeholder="Enter current password"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        >
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="new-password">New Password</Label>
                       <Input
                         id="new-password"
-                        type="password"
+                        type={showPassword ? "text" : "password"}
                         value={passwordData.new}
                         onChange={(e) => setPasswordData({...passwordData, new: e.target.value})}
                         placeholder="Enter new password"
@@ -538,7 +585,7 @@ export default function TeacherProfile() {
                       <Label htmlFor="confirm-password">Confirm New Password</Label>
                       <Input
                         id="confirm-password"
-                        type="password"
+                        type={showPassword ? "text" : "password"}
                         value={passwordData.confirm}
                         onChange={(e) => setPasswordData({...passwordData, confirm: e.target.value})}
                         placeholder="Confirm new password"

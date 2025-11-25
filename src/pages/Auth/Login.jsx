@@ -18,6 +18,8 @@ import {
   CheckCircle2,
   ArrowRight,
   Sparkles,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -39,6 +41,7 @@ export default function Login() {
   const [resetLoading, setResetLoading] = useState(false);
   const [resetSuccess, setResetSuccess] = useState("");
   const [resetError, setResetError] = useState("");
+  const [showPassword, setShowPassword] = useState(false); // added for toggle
 
   const validateForm = () => {
     const newErrors = {};
@@ -285,7 +288,7 @@ export default function Login() {
                 />
                 <Input
                   id="password"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   placeholder="Enter your password"
                   value={password}
                   onChange={(e) => {
@@ -295,7 +298,7 @@ export default function Login() {
                   onFocus={() => setFocusedField("password")}
                   onBlur={() => setFocusedField(null)}
                   onKeyDown={(e) => e.key === "Enter" && handleSubmit(e)}
-                  className={`pl-10 h-12 text-base bg-slate-800/50 border-slate-700/50 text-slate-100 placeholder:text-slate-500
+                  className={`pl-10 pr-10 h-12 text-base bg-slate-800/50 border-slate-700/50 text-slate-100 placeholder:text-slate-500
                     focus:bg-slate-800/70 focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/20
                     transition-all duration-300 backdrop-blur-sm
                     ${
@@ -310,6 +313,19 @@ export default function Login() {
                     }`}
                   disabled={loading}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-3.5 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  tabIndex={-1}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-5 w-5" />
+                  ) : (
+                    <Eye className="h-5 w-5" />
+                  )}
+                </button>
                 {focusedField === "password" && (
                   <div className="absolute inset-0 bg-gradient-to-r from-purple-500/10 to-pink-500/10 rounded-md -z-10 blur-xl"></div>
                 )}

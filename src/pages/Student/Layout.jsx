@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Outlet, Link, useNavigate } from "react-router-dom";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { StudentSidebar } from "@/components/Sidebars/StudentSidebar";
@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useTheme } from "@/contexts/ThemeContext";
+import { getUserAuth } from "@/services/userService";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
@@ -25,6 +26,7 @@ const StudentLayout = ({ children }) => {
   const { theme, toggleTheme } = useTheme();
   const [loggingOut, setLoggingOut] = useState(false);
   const [showLogoutSuccess, setShowLogoutSuccess] = useState(false);
+  const [student, setStudent] = useState(null);
   const [notifications] = useState([
     { id: 1, message: "New assignment posted", unread: true },
     { id: 2, message: "Exam results available", unread: true },
@@ -32,6 +34,32 @@ const StudentLayout = ({ children }) => {
   ]);
 
   const unreadCount = notifications.filter(n => n.unread).length;
+
+  // Fetch connected student info
+  useEffect(() => {
+    const fetchStudent = async () => {
+      try {
+        const response = await getUserAuth();
+        const userData = response.data || response;
+        setStudent(userData);
+      } catch (error) {
+        console.error("Error fetching student data:", error);
+      }
+    };
+    fetchStudent();
+  }, []);
+
+  const getInitials = () => {
+    if (!student) return "ST";
+    const first = student.prenom?.[0]?.toUpperCase() || "";
+    const last = student.nom?.[0]?.toUpperCase() || "";
+    return first + last || "ST";
+  };
+
+  const getFullName = () => {
+    if (!student) return "Student User";
+    return `${student.prenom || ""} ${student.nom || ""}`.trim() || "Student User";
+  };
 
   const handleLogout = async () => {
     try {
@@ -180,22 +208,31 @@ const StudentLayout = ({ children }) => {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {/* User Menu */}
+              {/* User Menu - Connected Student Info */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="relative h-9 w-9 rounded-full">
-                    <Avatar className="h-9 w-9">
-                      <AvatarImage src="/placeholder-avatar.jpg" alt="Student" />
-                      <AvatarFallback>ST</AvatarFallback>
+                    <Avatar className="h-9 w-9 border-2 border-primary/20">
+                      {student?.image_User ? (
+                        <AvatarImage 
+                          src={`${API_BASE_URL}/images/${student.image_User}`}
+                          alt={getFullName()}
+                        />
+                      ) : null}
+                      <AvatarFallback className="bg-gradient-to-br from-primary to-secondary text-white font-semibold">
+                        {getInitials()}
+                      </AvatarFallback>
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-56" align="end" forceMount>
                   <DropdownMenuLabel className="font-normal">
                     <div className="flex flex-col space-y-1">
-                      <p className="text-sm font-medium leading-none">Student User</p>
+                      <p className="text-sm font-medium leading-none">
+                        {getFullName()}
+                      </p>
                       <p className="text-xs leading-none text-muted-foreground">
-                        student@edunex.com
+                        {student?.email || "student@edunex.com"}
                       </p>
                     </div>
                   </DropdownMenuLabel>

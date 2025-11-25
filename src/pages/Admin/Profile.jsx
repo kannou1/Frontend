@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { User, Mail, Phone, Calendar, Briefcase, Camera, Save, X, Lock, Bell, Trash2, BookOpen, Users, Clock, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
+import { User, Mail, Loader2, Camera, Save, X, Lock, Bell, Trash2, Settings, Key, Users, BookOpen, CheckCircle2, XCircle, AlertCircle, Eye, EyeOff } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -21,30 +21,21 @@ import {
   Alert,
   AlertDescription,
 } from "@/components/ui/alert";
+import { getUserAuth } from "@/services/userService";
 
-export default function TeacherProfile() {
-  const [formData, setFormData] = useState({
-    prenom: "Leila",
-    nom: "Trabelsi",
-    email: "leila.trabelsi@edunex.com",
-    role: "enseignant",
-    image_User: null,
-    NumTel: "+216 22 456 789",
-    Adresse: "Ariana, Tunisie",
-    datedeNaissance: "1985-03-12",
-    specialite: "Mathématiques",
-    dateEmbauche: "2018-09-01",
-    NumTelEnseignant: "+216 22 456 789",
-    verified: true,
-    Status: true
-  });
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
+export default function AdminProfile() {
+  const [formData, setFormData] = useState(null);
+  const [originalData, setOriginalData] = useState(null);
   const [previewImage, setPreviewImage] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
   const [showEmailDialog, setShowEmailDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [toast, setToast] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
   
   const [passwordData, setPasswordData] = useState({
     current: "",
@@ -59,6 +50,32 @@ export default function TeacherProfile() {
     notifications: true,
     updates: false
   });
+
+  // Fetch connected admin info
+  useEffect(() => {
+    fetchAdminData();
+  }, []);
+
+  const fetchAdminData = async () => {
+    try {
+      setLoading(true);
+      const response = await getUserAuth();
+      const userData = response.data || response;
+      
+      setFormData(userData);
+      setOriginalData(userData);
+      
+      // Set preview image if exists
+      if (userData.image_User) {
+        setPreviewImage(`${API_BASE_URL}/images/${userData.image_User}`);
+      }
+    } catch (error) {
+      console.error("Error fetching admin data:", error);
+      showToast("error", "Failed to load profile data");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const showToast = (type, message) => {
     setToast({ type, message });
@@ -79,9 +96,10 @@ export default function TeacherProfile() {
     }
   };
 
+  // UI-only handlers (no API calls)
   const handleSave = () => {
-    setIsEditing(false);
     showToast("success", "Profile updated successfully!");
+    setIsEditing(false);
   };
 
   const handlePasswordChange = () => {
@@ -119,6 +137,20 @@ export default function TeacherProfile() {
     setShowDeleteDialog(false);
   };
 
+  const handleCancel = () => {
+    setFormData(originalData);
+    setPreviewImage(originalData.image_User ? `${API_BASE_URL}/images/${originalData.image_User}` : null);
+    setIsEditing(false);
+  };
+
+  if (loading || !formData) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Toast Notification */}
@@ -147,14 +179,14 @@ export default function TeacherProfile() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold bg-gradient-to-r from-secondary to-accent bg-clip-text text-transparent">
-            My Profile
+            Admin Profile
           </h1>
-          <p className="text-muted-foreground mt-1">Manage your teacher account</p>
+          <p className="text-muted-foreground mt-1">Manage your admin account & security</p>
         </div>
         <div className="flex gap-2">
           {isEditing ? (
             <>
-              <Button variant="outline" onClick={() => setIsEditing(false)}>
+              <Button variant="outline" onClick={handleCancel}>
                 <X className="mr-2 h-4 w-4" />
                 Cancel
               </Button>
@@ -179,9 +211,9 @@ export default function TeacherProfile() {
             {/* Avatar */}
             <div className="relative group">
               <Avatar className="h-32 w-32 border-4 border-background shadow-xl">
-                <AvatarImage src={previewImage || "/placeholder-avatar.jpg"} alt="Profile" />
+                <AvatarImage src={previewImage} alt="Profile" />
                 <AvatarFallback className="text-3xl font-bold bg-gradient-to-br from-secondary to-accent text-white">
-                  {formData.prenom[0]}{formData.nom[0]}
+                  {formData.prenom?.[0]?.toUpperCase()}{formData.nom?.[0]?.toUpperCase()}
                 </AvatarFallback>
               </Avatar>
               {isEditing && (
@@ -203,14 +235,14 @@ export default function TeacherProfile() {
                   {formData.email}
                 </p>
               </div>
-              
+
               <div className="flex flex-wrap items-center justify-center md:justify-start gap-2">
                 <Badge variant="secondary" className="px-3 py-1">
-                  <Briefcase className="h-3 w-3 mr-1" />
-                  Teacher
+                  <Settings className="h-3 w-3 mr-1" />
+                  Admin
                 </Badge>
                 <Badge variant="outline" className="border-purple-500 text-purple-600">
-                  {formData.specialite}
+                  Super Admin
                 </Badge>
                 {formData.verified && (
                   <Badge variant="outline" className="border-green-500 text-green-600">
@@ -247,7 +279,7 @@ export default function TeacherProfile() {
                   <Input
                     id="prenom"
                     name="prenom"
-                    value={formData.prenom}
+                    value={formData.prenom || ''}
                     onChange={handleChange}
                     disabled={!isEditing}
                   />
@@ -257,7 +289,7 @@ export default function TeacherProfile() {
                   <Input
                     id="nom"
                     name="nom"
-                    value={formData.nom}
+                    value={formData.nom || ''}
                     onChange={handleChange}
                     disabled={!isEditing}
                   />
@@ -270,7 +302,7 @@ export default function TeacherProfile() {
                   id="email"
                   name="email"
                   type="email"
-                  value={formData.email}
+                  value={formData.email || ''}
                   onChange={handleChange}
                   disabled={!isEditing}
                 />
@@ -283,7 +315,7 @@ export default function TeacherProfile() {
                     id="NumTel"
                     name="NumTel"
                     type="tel"
-                    value={formData.NumTel}
+                    value={formData.NumTel || ''}
                     onChange={handleChange}
                     disabled={!isEditing}
                   />
@@ -294,7 +326,7 @@ export default function TeacherProfile() {
                     id="datedeNaissance"
                     name="datedeNaissance"
                     type="date"
-                    value={formData.datedeNaissance}
+                    value={formData.datedeNaissance?.split('T')[0] || ''}
                     onChange={handleChange}
                     disabled={!isEditing}
                   />
@@ -306,7 +338,7 @@ export default function TeacherProfile() {
                 <Textarea
                   id="Adresse"
                   name="Adresse"
-                  value={formData.Adresse}
+                  value={formData.Adresse || ''}
                   onChange={handleChange}
                   disabled={!isEditing}
                   rows={3}
@@ -315,62 +347,47 @@ export default function TeacherProfile() {
             </CardContent>
           </Card>
 
-          {/* Professional Information */}
-          <Card className="border-secondary/20">
+          <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Briefcase className="h-5 w-5 text-secondary" />
-                Professional Information
+                <Settings className="h-5 w-5 text-secondary" />
+                Admin Settings
               </CardTitle>
-              <CardDescription>Your teaching credentials and details (read-only)</CardDescription>
+              <CardDescription>Your admin level and join date are managed by the platform.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="specialite">Specialization</Label>
+                  <Label htmlFor="role">Role</Label>
                   <Input
-                    id="specialite"
-                    name="specialite"
-                    value={formData.specialite}
+                    id="role"
+                    name="role"
+                    value={formData.role || 'admin'}
                     disabled
-                    placeholder="e.g., Mathématiques"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="dateEmbauche">Hire Date</Label>
+                  <Label htmlFor="createdAt">Member Since</Label>
                   <Input
-                    id="dateEmbauche"
-                    name="dateEmbauche"
+                    id="createdAt"
+                    name="createdAt"
                     type="date"
-                    value={formData.dateEmbauche}
+                    value={formData.createdAt?.split('T')[0] || ''}
                     disabled
                   />
                 </div>
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="NumTelEnseignant">Professional Phone</Label>
-                <Input
-                  id="NumTelEnseignant"
-                  name="NumTelEnseignant"
-                  type="tel"
-                  value={formData.NumTelEnseignant}
-                  onChange={handleChange}
-                  disabled={!isEditing}
-                />
-              </div>
-
               <Alert className="border-secondary/30 bg-secondary/5">
-                <Briefcase className="h-4 w-4 text-secondary" />
+                <Settings className="h-4 w-4 text-secondary" />
                 <AlertDescription>
-                  Professional information such as specialization and hire date is managed by administration. Contact HR for any changes.
+                  Platform-level permissions are managed by administration. Contact the super-admin for changes.
                 </AlertDescription>
               </Alert>
             </CardContent>
           </Card>
         </div>
 
-        {/* Sidebar - Quick Stats & Actions */}
+        {/* Sidebar - Stats & Actions */}
         <div className="space-y-6">
           <Card>
             <CardHeader>
@@ -379,7 +396,7 @@ export default function TeacherProfile() {
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Account Type</span>
-                <Badge variant="secondary">Teacher</Badge>
+                <Badge variant="secondary">Admin</Badge>
               </div>
               <Separator />
               <div className="flex items-center justify-between">
@@ -398,16 +415,19 @@ export default function TeacherProfile() {
               <Separator />
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Member Since</span>
-                <span className="text-sm font-medium">Sep 2018</span>
+                <span className="text-sm font-medium">
+                  {formData.createdAt ? new Date(formData.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'N/A'}
+                </span>
               </div>
             </CardContent>
           </Card>
 
+          {/* Admin Overview */}
           <Card className="overflow-hidden">
             <CardHeader className="bg-gradient-to-br from-secondary/10 to-accent/10 border-b">
               <CardTitle className="flex items-center gap-2">
-                <BookOpen className="h-5 w-5 text-secondary" />
-                Teaching Overview
+                <Settings className="h-5 w-5 text-secondary" />
+                Admin Overview
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
@@ -416,16 +436,16 @@ export default function TeacherProfile() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="p-2 bg-secondary/10 rounded-lg">
-                        <BookOpen className="h-5 w-5 text-secondary" />
+                        <Users className="h-5 w-5 text-secondary" />
                       </div>
                       <div>
-                        <p className="text-xs text-muted-foreground">Active Courses</p>
-                        <p className="text-2xl font-bold text-secondary">8</p>
+                        <p className="text-xs text-muted-foreground">Total Users</p>
+                        <p className="text-2xl font-bold text-secondary">1,248</p>
                       </div>
                     </div>
                     <div className="text-right">
                       <Badge variant="outline" className="border-secondary/30 text-secondary">
-                        Teaching
+                        Active
                       </Badge>
                     </div>
                   </div>
@@ -435,16 +455,16 @@ export default function TeacherProfile() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="p-2 bg-accent/10 rounded-lg">
-                        <Users className="h-5 w-5 text-accent" />
+                        <BookOpen className="h-5 w-5 text-accent" />
                       </div>
                       <div>
-                        <p className="text-xs text-muted-foreground">Total Students</p>
-                        <p className="text-2xl font-bold text-accent">156</p>
+                        <p className="text-xs text-muted-foreground">Total Classes</p>
+                        <p className="text-2xl font-bold text-accent">52</p>
                       </div>
                     </div>
                     <div className="text-right">
                       <Badge variant="outline" className="border-accent/30 text-accent">
-                        Enrolled
+                        Running
                       </Badge>
                     </div>
                   </div>
@@ -454,16 +474,16 @@ export default function TeacherProfile() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="p-2 bg-blue-100 rounded-lg">
-                        <Clock className="h-5 w-5 text-blue-600" />
+                        <Key className="h-5 w-5 text-blue-600" />
                       </div>
                       <div>
-                        <p className="text-xs text-muted-foreground">Teaching Hours</p>
-                        <p className="text-2xl font-bold text-blue-600">24</p>
+                        <p className="text-xs text-muted-foreground">Admin Actions</p>
+                        <p className="text-2xl font-bold text-blue-600">847</p>
                       </div>
                     </div>
                     <div className="text-right">
                       <Badge variant="outline" className="border-blue-500 text-blue-600">
-                        Per Week
+                        This Month
                       </Badge>
                     </div>
                   </div>
@@ -472,9 +492,10 @@ export default function TeacherProfile() {
             </CardContent>
           </Card>
 
+          {/* Security & Preferences */}
           <Card>
             <CardHeader>
-              <CardTitle>Settings</CardTitle>
+              <CardTitle>Security & Preferences</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               {/* Change Password Dialog */}
@@ -493,7 +514,6 @@ export default function TeacherProfile() {
                     </DialogDescription>
                   </DialogHeader>
                   
-                  {/* Password Error/Success Message */}
                   {passwordError && (
                     <Alert 
                       className={`border-2 ${
@@ -516,19 +536,28 @@ export default function TeacherProfile() {
                   <div className="space-y-4 py-4">
                     <div className="space-y-2">
                       <Label htmlFor="current-password">Current Password</Label>
-                      <Input
-                        id="current-password"
-                        type="password"
-                        value={passwordData.current}
-                        onChange={(e) => setPasswordData({...passwordData, current: e.target.value})}
-                        placeholder="Enter current password"
-                      />
+                      <div className="relative">
+                        <Input
+                          id="current-password"
+                          type={showPassword ? "text" : "password"}
+                          value={passwordData.current}
+                          onChange={(e) => setPasswordData({...passwordData, current: e.target.value})}
+                          placeholder="Enter current password"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        >
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="new-password">New Password</Label>
                       <Input
                         id="new-password"
-                        type="password"
+                        type={showPassword ? "text" : "password"}
                         value={passwordData.new}
                         onChange={(e) => setPasswordData({...passwordData, new: e.target.value})}
                         placeholder="Enter new password"
@@ -538,7 +567,7 @@ export default function TeacherProfile() {
                       <Label htmlFor="confirm-password">Confirm New Password</Label>
                       <Input
                         id="confirm-password"
-                        type="password"
+                        type={showPassword ? "text" : "password"}
                         value={passwordData.confirm}
                         onChange={(e) => setPasswordData({...passwordData, confirm: e.target.value})}
                         placeholder="Confirm new password"
@@ -582,8 +611,8 @@ export default function TeacherProfile() {
                   <div className="space-y-4 py-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium">Newsletter</p>
-                        <p className="text-sm text-muted-foreground">Receive our weekly newsletter</p>
+                        <p className="font-medium">System Alerts</p>
+                        <p className="text-sm text-muted-foreground">Critical system notifications</p>
                       </div>
                       <Button
                         variant={emailPreferences.newsletter ? "default" : "outline"}
@@ -596,8 +625,8 @@ export default function TeacherProfile() {
                     <Separator />
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium">Student Updates</p>
-                        <p className="text-sm text-muted-foreground">Updates about your students</p>
+                        <p className="font-medium">User Notifications</p>
+                        <p className="text-sm text-muted-foreground">Updates about user activities</p>
                       </div>
                       <Button
                         variant={emailPreferences.notifications ? "default" : "outline"}
@@ -610,8 +639,8 @@ export default function TeacherProfile() {
                     <Separator />
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium">Course Reminders</p>
-                        <p className="text-sm text-muted-foreground">Reminders for upcoming classes</p>
+                        <p className="font-medium">Weekly Reports</p>
+                        <p className="text-sm text-muted-foreground">Platform statistics and reports</p>
                       </div>
                       <Button
                         variant={emailPreferences.updates ? "default" : "outline"}
@@ -650,7 +679,7 @@ export default function TeacherProfile() {
                   </DialogHeader>
                   <Alert className="border-red-200 bg-red-50">
                     <AlertDescription className="text-sm text-red-800">
-                      ⚠️ Warning: All your data, including courses, student records, and personal information will be permanently deleted.
+                      ⚠️ Warning: All your data, including account information and admin logs will be permanently deleted.
                     </AlertDescription>
                   </Alert>
                   <DialogFooter>
