@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Outlet, Link, useNavigate } from "react-router-dom";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AdminSidebar } from "@/components/Sidebars/AdminSidebar";
@@ -17,27 +17,25 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useTheme } from "@/contexts/ThemeContext";
+import { getAllNotifications } from "@/services/notificationService";
+import { getUserAuth } from "@/services/userService";
+import { useSocket } from "@/hooks/useSocket";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
-
-const exampleNotifications = [
-  { id: 1, message: "New student <b>Sara Johnson</b> enrolled", date: "Just now", unread: true },
-  { id: 2, message: "Class <b>3A Informatique</b> schedule updated", date: "10 min ago", unread: true },
-  { id: 3, message: "Course completion report is ready", date: "Today, 09:05", unread: false },
-  { id: 4, message: "System maintenance scheduled on 26 Nov", date: "Yesterday", unread: false },
-];
 
 const AdminLayout = ({ children }) => {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
   const [loggingOut, setLoggingOut] = useState(false);
   const [showLogoutSuccess, setShowLogoutSuccess] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  
+  const [notifications, setNotifications] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [loadingNotifications, setLoadingNotifications] = useState(true);
 
-  // Use the static example notifications array
-  const [notifications] = useState(exampleNotifications);
-  const unreadCount = notifications.filter((n) => n.unread).length;
+  const audioRef = useRef(null);
 
-  // Get user from localStorage
   const storedUser = typeof window !== "undefined"
     ? JSON.parse(localStorage.getItem("user") || "{}")
     : {};
@@ -45,11 +43,195 @@ const AdminLayout = ({ children }) => {
     ? `${storedUser.prenom} ${storedUser.nom ?? ""}`.trim()
     : storedUser.nom ?? "";
   const userEmail = storedUser.email ?? "";
-  // CORRECTED - Use real user image if exists
   const avatarSrc = storedUser.image_User
     ? `${API_BASE_URL}/images/${storedUser.image_User}`
     : "/placeholder-avatar.jpg";
   const avatarFallback = (storedUser.prenom?.[0] ?? "U") + (storedUser.nom?.[0] ?? "");
+
+  const socket = useSocket(storedUser._id);
+
+  // Check screen size
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // Initialize audio
+  useEffect(() => {
+    console.log("🎵 Initialisation de l'audio...");
+    audioRef.current = new Audio('/sounds/notification.mp3');
+    audioRef.current.volume = 0.5;
+    
+    audioRef.current.addEventListener('canplaythrough', () => {
+      console.log("✅ Fichier audio chargé avec succès");
+    });
+    
+    audioRef.current.addEventListener('error', (e) => {
+      console.error("❌ Erreur de chargement audio:", e);
+      console.error("Vérifiez que le fichier existe à: public/sounds/notification.mp3");
+    });
+    
+    const unlockAudio = () => {
+      if (audioRef.current) {
+        audioRef.current.play()
+          .then(() => {
+            audioRef.current.pause();
+            audioRef.current.currentTime = 0;
+            console.log("✅ Audio débloqué par interaction utilisateur");
+          })
+          .catch(() => {});
+        document.removeEventListener('click', unlockAudio);
+      }
+    };
+    
+    document.addEventListener('click', unlockAudio);
+    
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+      document.removeEventListener('click', unlockAudio);
+    };
+  }, []);
+
+  useEffect(() => {
+    fetchNotifications();
+  }, []);
+
+  useEffect(() => {
+    const handleNotificationsUpdate = () => {
+      console.log("Événement notificationsUpdated reçu, rafraîchissement...");
+      fetchNotifications();
+    };
+
+    window.addEventListener('notificationsUpdated', handleNotificationsUpdate);
+    
+    return () => {
+      window.removeEventListener('notificationsUpdated', handleNotificationsUpdate);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleNewNotification = (notification) => {
+      console.log("🔔 Nouvelle notification reçue en temps réel:", notification);
+      
+      if (notification.type === "demande" && notification.message?.includes("a demandé")) {
+        setNotifications(prev => {
+          const newNotification = {
+            id: notification._id || Date.now(),
+            message: notification.message,
+            date: formatDate(new Date()),
+            unread: true,
+          };
+          
+          const isDuplicate = prev.some(n => n.id === newNotification.id);
+          if (isDuplicate) return prev;
+          
+          return [newNotification, ...prev].slice(0, 5);
+        });
+
+        playNotificationSound();
+      }
+    };
+
+    socket.on('receiveNotification', handleNewNotification);
+
+    return () => {
+      socket.off('receiveNotification', handleNewNotification);
+    };
+  }, [socket]);
+
+  const playNotificationSound = () => {
+    console.log("🔊 Tentative de lecture du son...");
+    
+    if (!audioRef.current) {
+      console.error("❌ audioRef.current est null");
+      return;
+    }
+    
+    try {
+      audioRef.current.currentTime = 0;
+      console.log("📢 Lecture du son en cours...");
+      
+      const playPromise = audioRef.current.play();
+      
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            console.log("✅ Son joué avec succès !");
+          })
+          .catch(error => {
+            console.warn("⚠️ Impossible de jouer le son:", error.message);
+            console.warn("💡 Cliquez n'importe où sur la page pour débloquer le son");
+          });
+      }
+    } catch (error) {
+      console.error("❌ Erreur lors de la lecture du son:", error);
+    }
+  };
+
+  const fetchNotifications = async () => {
+    try {
+      setLoadingNotifications(true);
+      
+      const userResponse = await getUserAuth();
+      const userData = userResponse.data || userResponse;
+      setCurrentUser(userData);
+
+      const notificationsData = await getAllNotifications();
+      
+      const filteredNotifications = notificationsData.filter(notif => {
+        const isDemandeType = notif.type === "demande";
+        const isCreationMessage = notif.message?.includes("a demandé");
+        const isForCurrentUser = notif.utilisateur?._id === userData._id || 
+                                 notif.utilisateur === userData._id;
+        return isDemandeType && isCreationMessage && isForCurrentUser;
+      });
+
+      const transformedNotifications = filteredNotifications
+        .slice(0, 5)
+        .map(notif => ({
+          id: notif._id,
+          message: notif.message || "New notification",
+          date: formatDate(notif.createdAt),
+          unread: !notif.estLu,
+        }));
+
+      setNotifications(transformedNotifications);
+    } catch (err) {
+      console.error("Failed to fetch notifications:", err);
+      setNotifications([]);
+    } finally {
+      setLoadingNotifications(false);
+    }
+  };
+
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInMinutes = Math.floor((now - date) / 60000);
+    
+    if (diffInMinutes < 1) return "Just now";
+    if (diffInMinutes < 60) return `${diffInMinutes} min ago`;
+    
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    if (diffInHours < 24) return `${diffInHours} hour${diffInHours > 1 ? 's' : ''} ago`;
+    
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays === 1) return "Yesterday";
+    if (diffInDays < 7) return `${diffInDays} days ago`;
+    
+    return date.toLocaleDateString();
+  };
+
+  const unreadCount = notifications.filter((n) => n.unread).length;
 
   const handleLogout = async () => {
     try {
@@ -80,132 +262,168 @@ const AdminLayout = ({ children }) => {
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen w-full">
+      <div className="flex min-h-screen w-full overflow-hidden">
         <AdminSidebar />
-        <SidebarInset>
-          <header className="sticky top-0 z-50 flex h-16 items-center justify-between border-b bg-background/95 backdrop-blur px-6 shadow-sm">
-            <div className="flex items-center gap-4">
-              <SidebarTrigger className="-ml-2">
-                <Button variant="ghost" size="icon" className="h-9 w-9">
-                  <Menu className="h-5 w-5" />
+        <SidebarInset className="flex-1 flex flex-col min-w-0">
+          {/* Header */}
+          <header className="sticky top-0 z-50 flex h-14 sm:h-16 items-center justify-between border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-3 sm:px-4 md:px-6 shadow-sm">
+            {/* Left Section */}
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
+              <SidebarTrigger className="-ml-1 sm:-ml-2">
+                <Button variant="ghost" size="icon" className="h-8 w-8 sm:h-9 sm:w-9 touch-manipulation">
+                  <Menu className="h-4 w-4 sm:h-5 sm:w-5" />
                 </Button>
               </SidebarTrigger>
-              <div className="flex items-center gap-3">
-                <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
-                  <span className="text-sm font-bold text-white">E</span>
+              
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                <div className="h-7 w-7 sm:h-8 sm:w-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center flex-shrink-0">
+                  <span className="text-xs sm:text-sm font-bold text-white">E</span>
                 </div>
-                <h1 className="text-lg font-semibold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                  EduNex Admin Portal
+                <h1 className="text-sm sm:text-base md:text-lg font-semibold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent truncate">
+                  {isMobile ? "EduNex" : "EduNex Admin Portal"}
                 </h1>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="icon" onClick={toggleTheme} className="h-9 w-9">
-                {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+
+            {/* Right Section */}
+            <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+              {/* Theme Toggle */}
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={toggleTheme} 
+                className="h-8 w-8 sm:h-9 sm:w-9 touch-manipulation"
+              >
+                {theme === "dark" ? (
+                  <Sun className="h-4 w-4 sm:h-5 sm:w-5" />
+                ) : (
+                  <Moon className="h-4 w-4 sm:h-5 sm:w-5" />
+                )}
               </Button>
+              
+              {/* Notifications */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-10 w-10 relative rounded-full hover:bg-primary/10 transition-all duration-200 hover:scale-105 group"
+                    className="h-8 w-8 sm:h-10 sm:w-10 relative rounded-full hover:bg-primary/10 transition-all duration-200 hover:scale-105 group touch-manipulation"
                   >
-                    <Bell className="h-5 w-5 group-hover:text-primary transition-colors" />
+                    <Bell className="h-4 w-4 sm:h-5 sm:w-5 group-hover:text-primary transition-colors" />
                     {unreadCount > 0 && (
                       <Badge
                         variant="destructive"
-                        className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs animate-pulse"
+                        className="absolute -top-0.5 -right-0.5 sm:-top-1 sm:-right-1 h-4 w-4 sm:h-5 sm:w-5 flex items-center justify-center p-0 text-[10px] sm:text-xs animate-pulse"
                       >
-                        {unreadCount}
+                        {unreadCount > 9 ? '9+' : unreadCount}
                       </Badge>
                     )}
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-80 max-h-96 overflow-y-auto p-0 shadow-lg border-0 bg-background/95 backdrop-blur-sm">
-                  <div className="px-4 py-3 border-b sticky top-0 z-10 bg-background bg-opacity-80">
-                    <span className="font-bold text-base">Notifications</span>
+                <DropdownMenuContent 
+                  align="end" 
+                  className="w-[calc(100vw-2rem)] sm:w-80 md:w-96 max-h-[70vh] sm:max-h-96 overflow-y-auto p-0 shadow-lg border-0 bg-background/95 backdrop-blur-sm"
+                  sideOffset={8}
+                >
+                  <div className="px-3 sm:px-4 py-2.5 sm:py-3 border-b sticky top-0 z-10 bg-background">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-sm sm:text-base">Notifications</span>
+                      {loadingNotifications && (
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      )}
+                    </div>
                   </div>
                   <div>
-                    {notifications.length === 0 && (
-                      <div className="p-4 text-center text-muted-foreground text-sm">
-                        No notifications
+                    {!loadingNotifications && notifications.length === 0 && (
+                      <div className="p-6 sm:p-8 text-center text-muted-foreground text-xs sm:text-sm">
+                        No new requests
                       </div>
                     )}
                     {notifications.map((notif) => (
                       <div
                         key={notif.id}
-                        className={`flex items-start gap-2 px-4 py-3 border-b last:border-b-0 hover:bg-accent/20 cursor-pointer transition-all duration-200 ${
+                        className={`flex items-start gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 sm:py-3 border-b last:border-b-0 hover:bg-accent/20 cursor-pointer transition-all duration-200 active:bg-accent/30 ${
                           notif.unread ? "bg-gradient-to-r from-primary/5 to-secondary/5" : ""
                         }`}
                       >
                         {notif.unread ? (
-                          <span className="mt-2 mr-1 w-2 h-2 rounded-full bg-primary inline-block" />
+                          <span className="mt-2 mr-0.5 sm:mr-1 w-2 h-2 rounded-full bg-primary inline-block animate-pulse flex-shrink-0" />
                         ) : (
-                          <span className="mt-2 mr-1 w-2 h-2 rounded-full bg-gray-400 opacity-50 inline-block" />
+                          <span className="mt-2 mr-0.5 sm:mr-1 w-2 h-2 rounded-full bg-gray-400 opacity-50 inline-block flex-shrink-0" />
                         )}
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-0">
                           <div
-                            className={`leading-snug text-sm ${
+                            className={`leading-snug text-xs sm:text-sm ${
                               notif.unread ? "font-semibold" : ""
                             }`}
-                            dangerouslySetInnerHTML={{ __html: notif.message }}
-                          />
-                          <div className="text-xs text-muted-foreground mt-1">
+                          >
+                            {notif.message}
+                          </div>
+                          <div className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">
                             {notif.date}
                           </div>
                         </div>
                       </div>
                     ))}
                   </div>
-                  <div className="p-2 text-center sticky bottom-0 bg-background bg-opacity-80 border-t">
-                    <Link to="/admin/notifications" className="text-primary hover:underline text-sm font-medium">
+                  <div className="p-2 text-center sticky bottom-0 bg-background border-t">
+                    <Link 
+                      to="/admin/notifications" 
+                      className="text-primary hover:underline text-xs sm:text-sm font-medium inline-block py-1 touch-manipulation"
+                    >
                       View all notifications
                     </Link>
                   </div>
                 </DropdownMenuContent>
               </DropdownMenu>
+
+              {/* User Menu */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="relative h-9 w-9 rounded-full">
-                    <Avatar className="h-9 w-9">
+                  <Button variant="ghost" className="relative h-8 w-8 sm:h-9 sm:w-9 rounded-full touch-manipulation">
+                    <Avatar className="h-8 w-8 sm:h-9 sm:w-9">
                       <AvatarImage src={avatarSrc} alt={userName} />
-                      <AvatarFallback>{avatarFallback}</AvatarFallback>
+                      <AvatarFallback className="text-xs sm:text-sm">{avatarFallback}</AvatarFallback>
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56" align="end">
+                <DropdownMenuContent 
+                  className="w-56 sm:w-64" 
+                  align="end"
+                  sideOffset={8}
+                >
                   <DropdownMenuLabel>
                     <div className="flex flex-col space-y-1">
-                      <p className="text-sm font-medium leading-none">
+                      <p className="text-xs sm:text-sm font-medium leading-none truncate">
                         {userName || "Unknown User"}
                       </p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
                         {userEmail || ""}
                       </p>
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
-                    <Link to="/admin/profile" className="flex items-center">
+                    <Link to="/admin/profile" className="flex items-center cursor-pointer touch-manipulation py-2.5 sm:py-2">
                       <User className="mr-2 h-4 w-4" />
-                      Profile
+                      <span className="text-sm">Profile</span>
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
-                    className="text-red-600 cursor-pointer"
+                    className="text-red-600 cursor-pointer touch-manipulation py-2.5 sm:py-2"
                     onClick={handleLogout}
                     disabled={loggingOut}
                   >
                     {loggingOut ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Logging out...
+                        <span className="text-sm">Logging out...</span>
                       </>
                     ) : (
                       <>
                         <LogOut className="mr-2 h-4 w-4" />
-                        Log out
+                        <span className="text-sm">Log out</span>
                       </>
                     )}
                   </DropdownMenuItem>
@@ -213,18 +431,24 @@ const AdminLayout = ({ children }) => {
               </DropdownMenu>
             </div>
           </header>
+
+          {/* Logout Success Alert */}
           {showLogoutSuccess && (
-            <div className="fixed top-20 right-6 z-50 animate-in slide-in-from-top-5">
-              <Alert className="bg-green-50 border-green-200 text-green-900 shadow-lg">
-                <CheckCircle className="h-4 w-4 text-green-600" />
-                <AlertDescription className="ml-2">
+            <div className="fixed top-16 sm:top-20 right-3 sm:right-6 left-3 sm:left-auto z-50 animate-in slide-in-from-top-5">
+              <Alert className="bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800 text-green-900 dark:text-green-100 shadow-lg">
+                <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                <AlertDescription className="ml-2 text-xs sm:text-sm">
                   Successfully logged out! Redirecting...
                 </AlertDescription>
               </Alert>
             </div>
           )}
-          <main className="flex-1">
-            <Outlet />
+
+          {/* Main Content */}
+          <main className="flex-1 overflow-auto bg-background">
+            <div className="h-full w-full max-w-[1920px] mx-auto p-3 xs:p-4 sm:p-5 md:p-6 lg:p-8">
+              <Outlet />
+            </div>
           </main>
         </SidebarInset>
       </div>

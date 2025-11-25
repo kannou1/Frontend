@@ -9,8 +9,9 @@ import {
   Settings,
   MessageSquare,
   Bell,
+  Megaphone,
+  FileText,
 } from "lucide-react";
-
 import {
   Sidebar,
   SidebarContent,
@@ -26,14 +27,13 @@ import { getUserAuth } from "@/services/userService";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
-// All navigation items (just one big group)
 const navItems = [
   { path: "", label: "Dashboard", icon: LayoutDashboard },
   { path: "users", label: "Users", icon: Users },
   { path: "classes", label: "Classes", icon: BookOpen },
   { path: "courses", label: "Courses", icon: NotebookPen },
-  { path: "reports", label: "Reports", icon: BarChart3 },
-  { path: "settings", label: "Settings", icon: Settings },
+  { path: "requests", label: "Requests", icon: FileText },
+  { path: "announcements", label: "Announcements", icon: Megaphone }, 
   { path: "messages", label: "Messages", icon: MessageSquare },
   { path: "notifications", label: "Notifications", icon: Bell },
 ];
@@ -72,12 +72,30 @@ export function AdminSidebar() {
   return (
     <Sidebar
       collapsible="icon"
-      className="border-r transition-[width] duration-200 ease-out flex flex-col h-screen"
+      className={`
+        border-r
+        transition-[width] duration-200 ease-out
+        flex flex-col
+        h-screen
+        bg-sidebar
+        w-[66px] md:w-[260px]
+        min-w-0
+        z-40
+      `}
+      style={{
+        width: isCollapsed ? 64 : 260,
+        minWidth: isCollapsed ? 64 : 220,
+        maxWidth: 360,
+      }}
     >
-      {/* Header/logo */}
-      <SidebarHeader 
-        className="h-16 border-b border-border/50 bg-gradient-to-br from-sidebar to-sidebar/80 flex items-center flex-shrink-0"
-      >
+      {/* Header */}
+      <SidebarHeader className={`
+        h-16 min-h-16 max-h-16
+        border-b border-border/50
+        bg-gradient-to-br from-sidebar to-sidebar/80
+        flex items-center flex-shrink-0
+        px-0 md:px-0
+      `}>
         <Link
           to="/admin/"
           className={`flex items-center w-full transition-all duration-200 ${
@@ -92,22 +110,18 @@ export function AdminSidebar() {
               <span className="text-base font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
                 EduNex
               </span>
-              <span className="text-[10px] text-muted-foreground">
-                Admin Portal
-              </span>
+              <span className="text-[10px] text-muted-foreground">Admin Portal</span>
             </div>
           )}
         </Link>
       </SidebarHeader>
 
-      {/* ALL Menu vertical - No scroll, flex-1 to fill space */}
-      <SidebarContent 
-        className={`py-4 transition-all duration-200 flex-1 overflow-hidden ${
-          isCollapsed ? 'px-1' : 'px-2'
-        }`}
-      >
-        <div className="h-full flex flex-col justify-center">
-          <SidebarMenu className="space-y-1">
+      {/* Main Menu (NO SCROLL) */}
+      <div className="flex-1 min-h-0 flex flex-col">
+        <SidebarContent
+          className={`flex-1 min-h-0 py-4 transition-all duration-200 ${isCollapsed ? 'px-0' : 'px-2'} relative`}
+        >
+          <SidebarMenu className="space-y-1 flex-1">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive =
@@ -138,9 +152,7 @@ export function AdminSidebar() {
                         }`}
                       />
                       {!isCollapsed && (
-                        <span className="font-medium whitespace-nowrap">
-                          {item.label}
-                        </span>
+                        <span className="font-medium whitespace-nowrap">{item.label}</span>
                       )}
                     </Link>
                   </SidebarMenuButton>
@@ -148,38 +160,43 @@ export function AdminSidebar() {
               );
             })}
           </SidebarMenu>
-        </div>
-      </SidebarContent>
+        </SidebarContent>
+      </div>
 
-      {/* Footer/User info - Connected Admin */}
+      {/* Footer/User */}
       <SidebarFooter 
         className={`border-t border-border/50 transition-all duration-200 flex-shrink-0 ${
-          isCollapsed ? 'p-2' : 'p-4'
-        }`}
+          isCollapsed ? 'p-2' : 'p-3'
+        } bg-sidebar`}
+        style={{
+          minHeight: "56px",
+          maxHeight: "100vh"
+        }}
       >
         <Link
           to="/admin/profile"
-          className={`flex items-center rounded-lg cursor-pointer transition-all hover:bg-accent/40 overflow-hidden ${
-            isCollapsed ? 'justify-center p-2' : 'gap-3 px-2 py-2'
-          }`}
+          className={`flex items-center rounded-lg cursor-pointer
+            transition-all hover:bg-accent/40 overflow-hidden
+            ${isCollapsed ? 'justify-center p-1.5' : 'gap-2.5 px-2 py-1.5'}
+          `}
         >
-          <Avatar className="h-9 w-9 border-2 border-primary/20 flex-shrink-0">
+          <Avatar className="h-8 w-8 border-2 border-primary/20 flex-shrink-0">
             {admin?.image_User ? (
               <AvatarImage 
-                src={`${API_BASE_URL}/images/${admin.image_User}`}
+                src={`${API_BASE_URL}/images/${admin.image_User}`} 
                 alt={getFullName()}
               />
             ) : null}
-            <AvatarFallback className="bg-gradient-to-br from-primary to-secondary text-white font-semibold">
+            <AvatarFallback className="bg-gradient-to-br from-primary to-secondary text-white font-semibold text-xs">
               {getInitials()}
             </AvatarFallback>
           </Avatar>
           {!isCollapsed && (
             <div className="flex flex-col flex-1 min-w-0">
-              <span className="text-sm font-semibold truncate whitespace-nowrap">
+              <span className="text-xs font-semibold truncate whitespace-nowrap leading-tight">
                 {getFullName()}
               </span>
-              <span className="text-xs text-muted-foreground truncate whitespace-nowrap">
+              <span className="text-[10px] text-muted-foreground truncate whitespace-nowrap leading-tight">
                 {admin?.email || "admin@edunex.com"}
               </span>
             </div>

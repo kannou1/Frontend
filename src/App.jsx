@@ -21,6 +21,8 @@ import AdminMessages from "./pages/Admin/Messages";
 import AdminProfile from "./pages/Admin/Profile";
 import AdminNotifications from "./pages/Admin/Notifications";
 import AdminClasses from "./pages/Admin/classes";
+import AdminAnnouncements from "./pages/Admin/Announcements";
+import AdminDemandes from "@/pages/Admin/demandes";
 
 // Teacher
 import TeacherLayout from "./pages/Teacher/Layout";
@@ -101,6 +103,8 @@ const App = () => (
             <Route path="settings" element={<AdminSettings />} />
             <Route path="messages" element={<AdminMessages />} />
             <Route path="notifications" element={<AdminNotifications />} />
+            <Route path="requests" element={<AdminDemandes />} />
+            <Route path="announcements" element={<AdminAnnouncements />} />
             <Route path="profile" element={<AdminProfile />} />
             <Route path="*" element={<StudentNotFound />} />
           </Route>

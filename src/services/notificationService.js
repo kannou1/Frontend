@@ -1,32 +1,76 @@
-import axios from 'axios';
+import axios from "axios";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
-const API_URL = `${API_BASE_URL}/notification`;
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const API_URL = `${API_BASE_URL}/notification`; // ⚠️ Changez selon votre route backend
 
-// Get all notifications
+// Create notification
+export async function createNotification(notificationData) {
+  try {
+    const response = await axios.post(API_URL, notificationData, { 
+      withCredentials: true 
+    });
+    return response.data;
+  } catch (error) {
+    throw error; // Renvoie l'erreur complète pour déboguer
+  }
+}
+
+// Get all notifications (admin only)
 export async function getAllNotifications() {
-  return await axios.get(`${API_URL}/getAllNotifications`, {
-    withCredentials: true,
-  });
+  try {
+    const response = await axios.get(API_URL, { 
+      withCredentials: true 
+    });
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
 }
 
-// Get notification by ID
-export async function getNotificationById(id) {
-  return await axios.get(`${API_URL}/getNotificationById/${id}`, {
-    withCredentials: true,
-  });
+// Get notifications by user
+export async function getNotificationsByUser(userId) {
+  try {
+    const response = await axios.get(`${API_URL}/user/${userId}`, { 
+      withCredentials: true 
+    });
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
 }
 
-// Delete notification by ID
-export async function deleteNotificationById(id) {
-  return await axios.delete(`${API_URL}/deleteNotification/${id}`, {
-    withCredentials: true,
-  });
+// Mark notification as read
+export async function markNotificationAsRead(notificationId) {
+  try {
+    const response = await axios.put(`${API_URL}/${notificationId}/read`, {}, { 
+      withCredentials: true 
+    });
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
 }
 
-// Delete all notifications
-export async function deleteAllNotifications() {
-  return await axios.delete(`${API_URL}/deleteAllNotifications`, {
-    withCredentials: true,
-  });
+// Delete single notification
+export async function deleteNotification(notificationId) {
+  try {
+    const response = await axios.delete(`${API_URL}/${notificationId}`, { 
+      withCredentials: true 
+    });
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+}
+
+// Delete all notifications of a user
+export async function deleteAllNotificationsOfUser(userId) {
+  try {
+    const response = await axios.delete(`${API_URL}/user/${userId}`, { 
+      withCredentials: true 
+    });
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
 }

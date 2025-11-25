@@ -1,32 +1,64 @@
-import axios from 'axios';
+import axios from "axios";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 const API_URL = `${API_BASE_URL}/demande`;
 
-// Get all demandes
+// Get all demandes (admin/teacher)
 export async function getAllDemandes() {
-  return await axios.get(`${API_URL}/getAllDemandes`, {
-    withCredentials: true,
-  });
+  try {
+    const response = await axios.get(`${API_URL}/getAll`, { 
+      withCredentials: true 
+    });
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
 }
 
 // Get demande by ID
 export async function getDemandeById(id) {
-  return await axios.get(`${API_URL}/getDemandeById/${id}`, {
-    withCredentials: true,
-  });
+  try {
+    const response = await axios.get(`${API_URL}/getById/${id}`, { 
+      withCredentials: true 
+    });
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
 }
 
-// Delete demande by ID
-export async function deleteDemandeById(id) {
-  return await axios.delete(`${API_URL}/deleteDemande/${id}`, {
-    withCredentials: true,
-  });
+// Update demande status (admin/teacher)
+export async function updateDemandeStatus(id, statut) {
+  try {
+    const response = await axios.put(`${API_URL}/update/${id}`, { statut }, { 
+      withCredentials: true 
+    });
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
 }
 
-// Delete all demandes
+// Delete demande (admin/teacher)
+export async function deleteDemande(id) {
+  try {
+    const response = await axios.delete(`${API_URL}/delete/${id}`, { 
+      withCredentials: true 
+    });
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+}
+
+// Delete all demandes (admin only)
 export async function deleteAllDemandes() {
-  return await axios.delete(`${API_URL}/deleteAllDemandes`, {
-    withCredentials: true,
-  });
+  try {
+    const response = await axios.delete(`${API_URL}/deleteAll`, { 
+      withCredentials: true 
+    });
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
 }
