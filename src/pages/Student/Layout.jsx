@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Outlet, Link, useNavigate } from "react-router-dom";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { StudentSidebar } from "@/components/Sidebars/StudentSidebar";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
-import { Menu, User, Bell, Sun, Moon, LogOut, Settings, Loader2, CheckCircle } from "lucide-react";
+import { Menu, User, Bell, Sun, Moon, LogOut, Loader2, CheckCircle, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,6 +18,11 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useTheme } from "@/contexts/ThemeContext";
 import { getUserAuth } from "@/services/userService";
+import {
+  getAllNotifications,
+  deleteNotification
+} from "@/services/notificationService";
+import { useSocket } from "@/hooks/useSocket";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
@@ -26,33 +31,156 @@ const StudentLayout = ({ children }) => {
   const { theme, toggleTheme } = useTheme();
   const [loggingOut, setLoggingOut] = useState(false);
   const [showLogoutSuccess, setShowLogoutSuccess] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
   const [student, setStudent] = useState(null);
-  const [notifications] = useState([
-    { id: 1, message: "New assignment posted", unread: true },
-    { id: 2, message: "Exam results available", unread: true },
-    { id: 3, message: "Class schedule reminder", unread: false },
-  ]);
+  const [notifications, setNotifications] = useState([]);
+  const [loadingNotifications, setLoadingNotifications] = useState(true);
 
-  const unreadCount = notifications.filter(n => n.unread).length;
+  const audioRef = useRef(null);
 
-  // Fetch connected student info
+  // Get student for avatar
   useEffect(() => {
     const fetchStudent = async () => {
       try {
         const response = await getUserAuth();
-        const userData = response.data || response;
-        setStudent(userData);
-      } catch (error) {
-        console.error("Error fetching student data:", error);
+        setStudent(response.data || response);
+      } catch (err) {
+        setStudent(null);
       }
     };
     fetchStudent();
   }, []);
 
+  // Responsive check
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // Notification sound
+  useEffect(() => {
+    audioRef.current = new Audio('/sounds/notification.mp3');
+    audioRef.current.volume = 0.5;
+    const unlockAudio = () => {
+      if (audioRef.current) {
+        audioRef.current.play().then(() => {
+          audioRef.current.pause();
+          audioRef.current.currentTime = 0;
+        }).catch(() => {});
+        document.removeEventListener('click', unlockAudio);
+      }
+    };
+    document.addEventListener('click', unlockAudio);
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+      document.removeEventListener('click', unlockAudio);
+    };
+  }, []);
+
+  // Notifications, real-time (socket optional)
+  const storedUser = typeof window !== "undefined"
+    ? JSON.parse(localStorage.getItem("user") || "{}")
+    : {};
+  const socket = useSocket(storedUser._id);
+
+  useEffect(() => { fetchNotifications(); }, []);
+  useEffect(() => {
+    const handler = () => fetchNotifications();
+    window.addEventListener('notificationsUpdated', handler);
+    return () => window.removeEventListener('notificationsUpdated', handler);
+  }, []);
+
+  // Real-time updates
+  useEffect(() => {
+    if (!socket) return;
+    const handleNewNotification = (notification) => {
+      setNotifications(prev => {
+        const newNotification = {
+          id: notification._id || Date.now(),
+          message: notification.message,
+          date: formatDate(notification.createdAt),
+          unread: !notification.estLu,
+        };
+        const isDuplicate = prev.some(n => n.id === newNotification.id);
+        if (isDuplicate) return prev;
+        playNotificationSound();
+        return [newNotification, ...prev].sort((a, b) => new Date(b.date) - new Date(a.date));
+      });
+      window.dispatchEvent(new Event("notificationsUpdated"));
+    };
+    socket.on('receiveNotification', handleNewNotification);
+    return () => { socket.off('receiveNotification', handleNewNotification); };
+  }, [socket]);
+
+  const playNotificationSound = () => {
+    if (!audioRef.current) return;
+    try {
+      audioRef.current.currentTime = 0;
+      audioRef.current.play().catch(() => {});
+    } catch {}
+  };
+
+  const fetchNotifications = async () => {
+    try {
+      setLoadingNotifications(true);
+      const userResponse = await getUserAuth();
+      const userData = userResponse.data || userResponse;
+
+      // Student: only those for THIS student, or some filtering
+      const notificationsData = await getAllNotifications();
+      // You may want to change this to match your backend logic for students
+      const filtered = notificationsData
+        .filter(notif => notif.utilisateur?._id === userData._id || notif.utilisateur === userData._id)
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+        .map(notif => ({
+          id: notif._id,
+          message: notif.message || "New notification",
+          date: formatDate(notif.createdAt),
+          unread: !notif.estLu,
+        }));
+      setNotifications(filtered);
+    } catch (err) {
+      setNotifications([]);
+    } finally {
+      setLoadingNotifications(false);
+    }
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInMinutes = Math.floor((now - date) / 60000);
+    if (diffInMinutes < 1) return "Just now";
+    if (diffInMinutes < 60) return `${diffInMinutes} min ago`;
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    if (diffInHours < 24) return `${diffInHours} hour${diffInHours > 1 ? "s" : ""} ago`;
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays === 1) return "Yesterday";
+    if (diffInDays < 7) return `${diffInDays} days ago`;
+    return date.toLocaleDateString();
+  };
+
+  const unreadCount = notifications.filter(n => n.unread).length;
+
+  const handleDeleteNotification = async (notifId) => {
+    try {
+      await deleteNotification(notifId);
+      setNotifications(prev => prev.filter(n => n.id !== notifId));
+      window.dispatchEvent(new Event("notificationsUpdated"));
+    } catch {}
+  };
+
   const getInitials = () => {
     if (!student) return "ST";
-    const first = student.prenom?.[0]?.toUpperCase() || "";
-    const last = student.nom?.[0]?.toUpperCase() || "";
+    const first = student?.prenom?.[0]?.toUpperCase() || "";
+    const last = student?.nom?.[0]?.toUpperCase() || "";
     return first + last || "ST";
   };
 
@@ -61,50 +189,28 @@ const StudentLayout = ({ children }) => {
     return `${student.prenom || ""} ${student.nom || ""}`.trim() || "Student User";
   };
 
+  const avatarSrc = student?.image_User
+    ? `${API_BASE_URL}/images/${student.image_User}`
+    : "/placeholder-avatar.jpg";
+
+  const avatarFallback = getInitials();
+
   const handleLogout = async () => {
     try {
       setLoggingOut(true);
-      
-      console.log('🔄 Starting logout process...');
-      
-      // Call logout API
-      const response = await fetch(`${API_BASE_URL}/users/logout`, {
+      await fetch(`${API_BASE_URL}/users/logout`, {
         method: 'POST',
         credentials: 'include',
       });
-
-      console.log('📡 Logout API response status:', response.status);
-
-      const data = await response.json();
-      console.log('📦 Logout API response data:', data);
-
-      // Clear local storage regardless of response
       localStorage.removeItem('user');
       localStorage.removeItem('token');
-      console.log('🗑️ Cleared localStorage');
-
-      // Show success message
       setShowLogoutSuccess(true);
-      console.log('✅ Logout successful!');
-
-      // Redirect after showing success message
-      setTimeout(() => {
-        navigate('/login', { replace: true });
-      }, 1500);
-
-    } catch (error) {
-      console.error('❌ Error during logout:', error);
-      
-      // Still clear local data and redirect
+      setTimeout(() => navigate('/login', { replace: true }), 1500);
+    } catch {
       localStorage.removeItem('user');
       localStorage.removeItem('token');
-      
-      // Show success message anyway (client-side logout still works)
       setShowLogoutSuccess(true);
-      
-      setTimeout(() => {
-        navigate('/login', { replace: true });
-      }, 1500);
+      setTimeout(() => navigate('/login', { replace: true }), 1500);
     } finally {
       setLoggingOut(false);
     }
@@ -112,156 +218,160 @@ const StudentLayout = ({ children }) => {
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen w-full">
+      <div className="flex min-h-screen w-full overflow-hidden">
         <StudentSidebar />
-
-        <SidebarInset>
-          <header className="sticky top-0 z-50 flex h-16 items-center justify-between border-b bg-background/95 backdrop-blur px-6 shadow-sm">
-            <div className="flex items-center gap-4">
-              <SidebarTrigger className="-ml-2">
-                <Button variant="ghost" size="icon" className="h-9 w-9">
-                  <Menu className="h-5 w-5" />
+        <SidebarInset className="flex-1 flex flex-col min-w-0">
+          {/* HEADER (fixed) */}
+          <header className="fixed top-0 left-0 right-0 z-50 flex h-14 sm:h-16 items-center justify-between border-b bg-background/95 backdrop-blur px-3 sm:px-4 md:px-6 shadow-sm"
+            style={{ minWidth: 0 }}>
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
+              <SidebarTrigger className="-ml-1 sm:-ml-2">
+                <Button variant="ghost" size="icon" className="h-8 w-8 sm:h-9 sm:w-9 touch-manipulation">
+                  <Menu className="h-4 w-4 sm:h-5 sm:w-5" />
                 </Button>
               </SidebarTrigger>
-
-              <div className="flex items-center gap-3">
-                <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
-                  <span className="text-sm font-bold text-white">E</span>
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                <div className="h-7 w-7 sm:h-8 sm:w-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center flex-shrink-0">
+                  <span className="text-xs sm:text-sm font-bold text-white">E</span>
                 </div>
-                <h1 className="text-lg font-semibold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                  EduNex Student Portal
+                <h1 className="text-sm sm:text-base md:text-lg font-semibold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent truncate">
+                  {isMobile ? "EduNex" : "EduNex Student Portal"}
                 </h1>
               </div>
             </div>
-
-            <div className="flex items-center gap-2">
-              {/* Theme Toggle */}
+            <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={toggleTheme}
-                className="h-9 w-9"
+                className="h-8 w-8 sm:h-9 sm:w-9 touch-manipulation"
               >
-                {theme === 'dark' ? (
-                  <Sun className="h-5 w-5" />
-                ) : (
-                  <Moon className="h-5 w-5" />
-                )}
+                {theme === 'dark'
+                  ? <Sun className="h-4 w-4 sm:h-5 sm:w-5" />
+                  : <Moon className="h-4 w-4 sm:h-5 sm:w-5" />
+                }
               </Button>
-
-              {/* Notifications */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-10 w-10 relative rounded-full hover:bg-primary/10 transition-all duration-200 hover:scale-105 group"
+                    className="h-8 w-8 sm:h-10 sm:w-10 relative rounded-full hover:bg-primary/10 transition-all duration-200 hover:scale-105 group touch-manipulation"
                   >
-                    <Bell className="h-5 w-5 group-hover:text-primary transition-colors" />
+                    <Bell className="h-4 w-4 sm:h-5 sm:w-5 group-hover:text-primary transition-colors" />
                     {unreadCount > 0 && (
                       <Badge
                         variant="destructive"
-                        className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs animate-pulse"
+                        className="absolute -top-0.5 -right-0.5 sm:-top-1 sm:-right-1 h-4 w-4 sm:h-5 sm:w-5 flex items-center justify-center p-0 text-[10px] sm:text-xs animate-pulse"
                       >
-                        {unreadCount}
+                        {unreadCount > 9 ? '9+' : unreadCount}
                       </Badge>
                     )}
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-80 p-0 shadow-lg border-0 bg-background/95 backdrop-blur-sm">
-                  <div className="p-4 border-b">
-                    <h3 className="font-semibold text-lg bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                      Notifications
-                    </h3>
-                    <p className="text-sm text-muted-foreground">You have {unreadCount} unread notifications</p>
+                <DropdownMenuContent
+                  align="end"
+                  className="w-[calc(100vw-2rem)] sm:w-80 md:w-96 max-h-[70vh] sm:max-h-96 overflow-y-auto p-0 shadow-lg border-0 bg-background/95 backdrop-blur-sm"
+                  sideOffset={8}
+                >
+                  <div className="px-3 sm:px-4 py-2.5 sm:py-3 border-b sticky top-0 z-10 bg-background">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-sm sm:text-base">Notifications</span>
+                      {loadingNotifications && (
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      )}
+                    </div>
                   </div>
-                  <div className="max-h-80 overflow-y-auto">
-                    {notifications.map((notification) => (
+                  <div>
+                    {!loadingNotifications && notifications.length === 0 && (
+                      <div className="p-6 sm:p-8 text-center text-muted-foreground text-xs sm:text-sm">
+                        No new notifications
+                      </div>
+                    )}
+                    {notifications.slice(0, 3).map((notif) => (
                       <div
-                        key={notification.id}
-                        className="flex items-start gap-3 p-4 hover:bg-muted/50 transition-colors border-b border-border/50 last:border-b-0"
+                        key={notif.id}
+                        className={`flex items-start gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 sm:py-3 border-b last:border-b-0 hover:bg-accent/20 cursor-pointer transition-all duration-200 active:bg-accent/30 ${
+                          notif.unread ? "bg-gradient-to-r from-primary/5 to-secondary/5" : ""
+                        }`}
                       >
-                        <div className="flex-shrink-0 mt-1">
-                          <div className={`h-3 w-3 rounded-full ${notification.unread ? 'bg-primary animate-pulse' : 'bg-muted'}`} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-sm ${notification.unread ? 'font-medium' : 'text-muted-foreground'}`}>
-                            {notification.message}
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-1">2 hours ago</p>
-                        </div>
-                        {notification.unread && (
-                          <div className="flex-shrink-0">
-                            <div className="h-2 w-2 bg-primary rounded-full" />
-                          </div>
+                        {notif.unread ? (
+                          <span className="mt-2 mr-0.5 sm:mr-1 w-2 h-2 rounded-full bg-primary inline-block animate-pulse flex-shrink-0" />
+                        ) : (
+                          <span className="mt-2 mr-0.5 sm:mr-1 w-2 h-2 rounded-full bg-gray-400 opacity-50 inline-block flex-shrink-0" />
                         )}
+                        <div className="flex-1 min-w-0">
+                          <div className={`leading-snug text-xs sm:text-sm ${notif.unread ? "font-semibold" : ""}`}>
+                            {notif.message}
+                          </div>
+                          <div className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">
+                            {notif.date}
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="ml-2 text-muted-foreground h-5 w-5"
+                          onClick={() => handleDeleteNotification(notif.id)}
+                          tabIndex={0}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
                     ))}
                   </div>
-                  <div className="p-3 border-t">
-                    <Link to="/student/notifications">
-                      <Button variant="ghost" className="w-full text-sm hover:bg-primary/10">
-                        View All Notifications
-                      </Button>
+                  <div className="p-2 text-center sticky bottom-0 bg-background border-t">
+                    <Link 
+                      to="/student/notifications" 
+                      className="text-primary hover:underline text-xs sm:text-sm font-medium inline-block py-1 touch-manipulation"
+                    >
+                      View all notifications
                     </Link>
                   </div>
                 </DropdownMenuContent>
               </DropdownMenu>
-
-              {/* User Menu - Connected Student Info */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="relative h-9 w-9 rounded-full">
-                    <Avatar className="h-9 w-9 border-2 border-primary/20">
-                      {student?.image_User ? (
-                        <AvatarImage 
-                          src={`${API_BASE_URL}/images/${student.image_User}`}
-                          alt={getFullName()}
-                        />
-                      ) : null}
-                      <AvatarFallback className="bg-gradient-to-br from-primary to-secondary text-white font-semibold">
-                        {getInitials()}
-                      </AvatarFallback>
+                  <Button variant="ghost" className="relative h-8 w-8 sm:h-9 sm:w-9 rounded-full touch-manipulation">
+                    <Avatar className="h-8 w-8 sm:h-9 sm:w-9">
+                      <AvatarImage src={avatarSrc} alt={getFullName()} />
+                      <AvatarFallback className="text-xs sm:text-sm">{avatarFallback}</AvatarFallback>
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56" align="end" forceMount>
-                  <DropdownMenuLabel className="font-normal">
+                <DropdownMenuContent className="w-56 sm:w-64" align="end" sideOffset={8}>
+                  <DropdownMenuLabel>
                     <div className="flex flex-col space-y-1">
-                      <p className="text-sm font-medium leading-none">
+                      <p className="text-xs sm:text-sm font-medium leading-none truncate">
                         {getFullName()}
                       </p>
-                      <p className="text-xs leading-none text-muted-foreground">
+                      <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
                         {student?.email || "student@edunex.com"}
                       </p>
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem>
-                    <Settings className="mr-2 h-4 w-4" />
-                    <span>Settings</span>
-                  </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <Link to="/student/profile" className="flex items-center">
+                    <Link to="/student/profile" className="flex items-center cursor-pointer touch-manipulation py-2.5 sm:py-2">
                       <User className="mr-2 h-4 w-4" />
-                      Profile
+                      <span className="text-sm">Profile</span>
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem 
-                    className="text-red-600 cursor-pointer"
+                  <DropdownMenuItem
+                    className="text-red-600 cursor-pointer touch-manipulation py-2.5 sm:py-2"
                     onClick={handleLogout}
                     disabled={loggingOut}
                   >
                     {loggingOut ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        <span>Logging out...</span>
+                        <span className="text-sm">Logging out...</span>
                       </>
                     ) : (
                       <>
                         <LogOut className="mr-2 h-4 w-4" />
-                        <span>Log out</span>
+                        <span className="text-sm">Log out</span>
                       </>
                     )}
                   </DropdownMenuItem>
@@ -269,21 +379,21 @@ const StudentLayout = ({ children }) => {
               </DropdownMenu>
             </div>
           </header>
-
-          {/* Logout Success Message */}
+          <div className="h-14 sm:h-16 w-full shrink-0" />
           {showLogoutSuccess && (
-            <div className="fixed top-20 right-6 z-50 animate-in slide-in-from-top-5">
-              <Alert className="bg-green-50 border-green-200 text-green-900 shadow-lg">
-                <CheckCircle className="h-4 w-4 text-green-600" />
-                <AlertDescription className="ml-2">
+            <div className="fixed top-16 sm:top-20 right-3 sm:right-6 left-3 sm:left-auto z-50 animate-in slide-in-from-top-5">
+              <Alert className="bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800 text-green-900 dark:text-green-100 shadow-lg">
+                <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                <AlertDescription className="ml-2 text-xs sm:text-sm">
                   Successfully logged out! Redirecting...
                 </AlertDescription>
               </Alert>
             </div>
           )}
-
-          <main className="flex-1">
-            <Outlet />
+          <main className="flex-1 overflow-auto bg-background">
+            <div className="h-full w-full max-w-[1920px] mx-auto p-3 xs:p-4 sm:p-5 md:p-6 lg:p-8">
+              <Outlet />
+            </div>
           </main>
         </SidebarInset>
       </div>

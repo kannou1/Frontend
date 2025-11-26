@@ -125,7 +125,6 @@ export default function Login() {
     }
   };
 
-  // ... (rest of your UI code unchanged)
 
 
 
@@ -369,17 +368,7 @@ export default function Login() {
             </div>
           </div>
 
-          {/* Sign up link */}
-          <p className="text-center text-sm text-slate-400">
-            Don't have an account?{" "}
-            <button
-              type="button"
-              className="font-semibold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent hover:from-purple-300 hover:to-cyan-300 transition-all"
-              onClick={() => alert("Sign up functionality")}
-            >
-              Create one now
-            </button>
-          </p>
+          
         </CardContent>
       </Card>
     </div>

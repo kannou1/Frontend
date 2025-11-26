@@ -118,11 +118,7 @@ export function StudentSidebar() {
         }`}
       >
         <SidebarGroup className="h-full flex flex-col">
-          {!isCollapsed && (
-            <SidebarGroupLabel className="px-4 mb-2 flex-shrink-0">
-              Menu
-            </SidebarGroupLabel>
-          )}
+          
           <SidebarGroupContent className="flex-1 flex flex-col justify-center">
             <SidebarMenu className="space-y-1">
               {navItems.map((item) => {
