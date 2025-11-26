@@ -24,7 +24,7 @@ import AdminSettings from "./pages/Admin/Settings";
 import AdminMessages from "./pages/Admin/Messages";
 import AdminProfile from "./pages/Admin/Profile";
 import AdminNotifications from "./pages/Admin/Notifications";
-import AdminAnnouncements from "./pages/Admin/Announcements";
+import AdminAnnouncements from "./pages/Admin/announcements";
 import AdminDemandes from "@/pages/Admin/demandes";
 
 // Teacher Section
