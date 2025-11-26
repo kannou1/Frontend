@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Outlet, Link, useNavigate } from "react-router-dom";
+import { Outlet, Link, useNavigate, useLocation } from "react-router-dom";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AdminSidebar } from "@/components/Sidebars/AdminSidebar";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
-import { Menu, User, Bell, Sun, Moon, LogOut, Loader2, CheckCircle } from "lucide-react";
+import { Menu, User, Bell, Sun, Moon, LogOut, Loader2, CheckCircle, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,7 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useTheme } from "@/contexts/ThemeContext";
-import { getAllNotifications } from "@/services/notificationService";
+import { getAllNotifications, deleteNotification } from "@/services/notificationService";
 import { getUserAuth } from "@/services/userService";
 import { useSocket } from "@/hooks/useSocket";
 
@@ -25,11 +25,12 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000
 
 const AdminLayout = ({ children }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { theme, toggleTheme } = useTheme();
   const [loggingOut, setLoggingOut] = useState(false);
   const [showLogoutSuccess, setShowLogoutSuccess] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  
+
   const [notifications, setNotifications] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [loadingNotifications, setLoadingNotifications] = useState(true);
@@ -50,46 +51,27 @@ const AdminLayout = ({ children }) => {
 
   const socket = useSocket(storedUser._id);
 
-  // Check screen size
   useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
     handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Initialize audio
   useEffect(() => {
-    console.log("🎵 Initialisation de l'audio...");
     audioRef.current = new Audio('/sounds/notification.mp3');
     audioRef.current.volume = 0.5;
-    
-    audioRef.current.addEventListener('canplaythrough', () => {
-      console.log("✅ Fichier audio chargé avec succès");
-    });
-    
-    audioRef.current.addEventListener('error', (e) => {
-      console.error("❌ Erreur de chargement audio:", e);
-      console.error("Vérifiez que le fichier existe à: public/sounds/notification.mp3");
-    });
-    
+
     const unlockAudio = () => {
       if (audioRef.current) {
-        audioRef.current.play()
-          .then(() => {
-            audioRef.current.pause();
-            audioRef.current.currentTime = 0;
-            console.log("✅ Audio débloqué par interaction utilisateur");
-          })
-          .catch(() => {});
+        audioRef.current.play().then(() => {
+          audioRef.current.pause();
+          audioRef.current.currentTime = 0;
+        }).catch(() => {});
         document.removeEventListener('click', unlockAudio);
       }
     };
-    
     document.addEventListener('click', unlockAudio);
-    
     return () => {
       if (audioRef.current) {
         audioRef.current.pause();
@@ -99,29 +81,19 @@ const AdminLayout = ({ children }) => {
     };
   }, []);
 
+  // Listen to custom event to trigger fetch everywhere (dropdown and notif page)
   useEffect(() => {
-    fetchNotifications();
+    const handler = () => fetchNotifications();
+    window.addEventListener('notificationsUpdated', handler);
+    return () => window.removeEventListener('notificationsUpdated', handler);
   }, []);
 
-  useEffect(() => {
-    const handleNotificationsUpdate = () => {
-      console.log("Événement notificationsUpdated reçu, rafraîchissement...");
-      fetchNotifications();
-    };
+  useEffect(() => { fetchNotifications(); }, []);
 
-    window.addEventListener('notificationsUpdated', handleNotificationsUpdate);
-    
-    return () => {
-      window.removeEventListener('notificationsUpdated', handleNotificationsUpdate);
-    };
-  }, []);
-
+  // Real-time updates (socket): update & update everywhere by firing event
   useEffect(() => {
     if (!socket) return;
-
     const handleNewNotification = (notification) => {
-      console.log("🔔 Nouvelle notification reçue en temps réel:", notification);
-      
       if (notification.type === "demande" && notification.message?.includes("a demandé")) {
         setNotifications(prev => {
           const newNotification = {
@@ -130,83 +102,50 @@ const AdminLayout = ({ children }) => {
             date: formatDate(new Date()),
             unread: true,
           };
-          
           const isDuplicate = prev.some(n => n.id === newNotification.id);
           if (isDuplicate) return prev;
-          
-          return [newNotification, ...prev].slice(0, 5);
+          return [newNotification, ...prev].sort((a, b) => new Date(b.date) - new Date(a.date));
         });
-
         playNotificationSound();
+        window.dispatchEvent(new Event("notificationsUpdated")); // trigger everywhere
       }
     };
-
     socket.on('receiveNotification', handleNewNotification);
-
-    return () => {
-      socket.off('receiveNotification', handleNewNotification);
-    };
+    return () => { socket.off('receiveNotification', handleNewNotification); };
   }, [socket]);
 
   const playNotificationSound = () => {
-    console.log("🔊 Tentative de lecture du son...");
-    
-    if (!audioRef.current) {
-      console.error("❌ audioRef.current est null");
-      return;
-    }
-    
+    if (!audioRef.current) return;
     try {
       audioRef.current.currentTime = 0;
-      console.log("📢 Lecture du son en cours...");
-      
-      const playPromise = audioRef.current.play();
-      
-      if (playPromise !== undefined) {
-        playPromise
-          .then(() => {
-            console.log("✅ Son joué avec succès !");
-          })
-          .catch(error => {
-            console.warn("⚠️ Impossible de jouer le son:", error.message);
-            console.warn("💡 Cliquez n'importe où sur la page pour débloquer le son");
-          });
-      }
-    } catch (error) {
-      console.error("❌ Erreur lors de la lecture du son:", error);
-    }
+      audioRef.current.play().catch(() => {});
+    } catch {}
   };
 
   const fetchNotifications = async () => {
     try {
       setLoadingNotifications(true);
-      
       const userResponse = await getUserAuth();
       const userData = userResponse.data || userResponse;
       setCurrentUser(userData);
 
       const notificationsData = await getAllNotifications();
-      
       const filteredNotifications = notificationsData.filter(notif => {
         const isDemandeType = notif.type === "demande";
         const isCreationMessage = notif.message?.includes("a demandé");
-        const isForCurrentUser = notif.utilisateur?._id === userData._id || 
-                                 notif.utilisateur === userData._id;
+        const isForCurrentUser = notif.utilisateur?._id === userData._id || notif.utilisateur === userData._id;
         return isDemandeType && isCreationMessage && isForCurrentUser;
-      });
+      })
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      .map(notif => ({
+        id: notif._id,
+        message: notif.message || "New notification",
+        date: formatDate(notif.createdAt),
+        unread: !notif.estLu,
+      }));
 
-      const transformedNotifications = filteredNotifications
-        .slice(0, 5)
-        .map(notif => ({
-          id: notif._id,
-          message: notif.message || "New notification",
-          date: formatDate(notif.createdAt),
-          unread: !notif.estLu,
-        }));
-
-      setNotifications(transformedNotifications);
+      setNotifications(filteredNotifications);
     } catch (err) {
-      console.error("Failed to fetch notifications:", err);
       setNotifications([]);
     } finally {
       setLoadingNotifications(false);
@@ -217,21 +156,26 @@ const AdminLayout = ({ children }) => {
     const date = new Date(dateString);
     const now = new Date();
     const diffInMinutes = Math.floor((now - date) / 60000);
-    
     if (diffInMinutes < 1) return "Just now";
     if (diffInMinutes < 60) return `${diffInMinutes} min ago`;
-    
     const diffInHours = Math.floor(diffInMinutes / 60);
-    if (diffInHours < 24) return `${diffInHours} hour${diffInHours > 1 ? 's' : ''} ago`;
-    
+    if (diffInHours < 24) return `${diffInHours} hour${diffInHours > 1 ? "s" : ""} ago`;
     const diffInDays = Math.floor(diffInHours / 24);
     if (diffInDays === 1) return "Yesterday";
     if (diffInDays < 7) return `${diffInDays} days ago`;
-    
     return date.toLocaleDateString();
   };
 
   const unreadCount = notifications.filter((n) => n.unread).length;
+
+  // Delete and update badge in real-time, then tell all listeners
+  const handleDeleteNotification = async (notifId) => {
+    try {
+      await deleteNotification(notifId);
+      setNotifications((prev) => prev.filter((n) => n.id !== notifId));
+      window.dispatchEvent(new Event("notificationsUpdated"));
+    } catch {}
+  };
 
   const handleLogout = async () => {
     try {
@@ -240,11 +184,9 @@ const AdminLayout = ({ children }) => {
         method: "POST",
         credentials: "include",
       });
-
       localStorage.removeItem("user");
       localStorage.removeItem("token");
       setShowLogoutSuccess(true);
-
       setTimeout(() => {
         navigate("/login", { replace: true });
       }, 1500);
@@ -265,16 +207,15 @@ const AdminLayout = ({ children }) => {
       <div className="flex min-h-screen w-full overflow-hidden">
         <AdminSidebar />
         <SidebarInset className="flex-1 flex flex-col min-w-0">
-          {/* Header */}
-          <header className="sticky top-0 z-50 flex h-14 sm:h-16 items-center justify-between border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-3 sm:px-4 md:px-6 shadow-sm">
-            {/* Left Section */}
+          {/* HEADER (fixed) */}
+          <header className="fixed top-0 left-0 right-0 z-50 flex h-14 sm:h-16 items-center justify-between border-b bg-background/95 backdrop-blur px-3 sm:px-4 md:px-6 shadow-sm"
+            style={{ minWidth: 0 }}>
             <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
               <SidebarTrigger className="-ml-1 sm:-ml-2">
                 <Button variant="ghost" size="icon" className="h-8 w-8 sm:h-9 sm:w-9 touch-manipulation">
                   <Menu className="h-4 w-4 sm:h-5 sm:w-5" />
                 </Button>
               </SidebarTrigger>
-              
               <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                 <div className="h-7 w-7 sm:h-8 sm:w-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center flex-shrink-0">
                   <span className="text-xs sm:text-sm font-bold text-white">E</span>
@@ -284,14 +225,11 @@ const AdminLayout = ({ children }) => {
                 </h1>
               </div>
             </div>
-
-            {/* Right Section */}
             <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-              {/* Theme Toggle */}
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                onClick={toggleTheme} 
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={toggleTheme}
                 className="h-8 w-8 sm:h-9 sm:w-9 touch-manipulation"
               >
                 {theme === "dark" ? (
@@ -300,7 +238,6 @@ const AdminLayout = ({ children }) => {
                   <Moon className="h-4 w-4 sm:h-5 sm:w-5" />
                 )}
               </Button>
-              
               {/* Notifications */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -320,8 +257,8 @@ const AdminLayout = ({ children }) => {
                     )}
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent 
-                  align="end" 
+                <DropdownMenuContent
+                  align="end"
                   className="w-[calc(100vw-2rem)] sm:w-80 md:w-96 max-h-[70vh] sm:max-h-96 overflow-y-auto p-0 shadow-lg border-0 bg-background/95 backdrop-blur-sm"
                   sideOffset={8}
                 >
@@ -339,7 +276,8 @@ const AdminLayout = ({ children }) => {
                         No new requests
                       </div>
                     )}
-                    {notifications.map((notif) => (
+                    {/* SHOW ONLY LAST 3 */}
+                    {notifications.slice(0, 3).map((notif) => (
                       <div
                         key={notif.id}
                         className={`flex items-start gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 sm:py-3 border-b last:border-b-0 hover:bg-accent/20 cursor-pointer transition-all duration-200 active:bg-accent/30 ${
@@ -352,17 +290,22 @@ const AdminLayout = ({ children }) => {
                           <span className="mt-2 mr-0.5 sm:mr-1 w-2 h-2 rounded-full bg-gray-400 opacity-50 inline-block flex-shrink-0" />
                         )}
                         <div className="flex-1 min-w-0">
-                          <div
-                            className={`leading-snug text-xs sm:text-sm ${
-                              notif.unread ? "font-semibold" : ""
-                            }`}
-                          >
+                          <div className={`leading-snug text-xs sm:text-sm ${notif.unread ? "font-semibold" : ""}`}>
                             {notif.message}
                           </div>
                           <div className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">
                             {notif.date}
                           </div>
                         </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="ml-2 text-muted-foreground h-5 w-5"
+                          onClick={() => handleDeleteNotification(notif.id)}
+                          tabIndex={0}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
                     ))}
                   </div>
@@ -376,7 +319,6 @@ const AdminLayout = ({ children }) => {
                   </div>
                 </DropdownMenuContent>
               </DropdownMenu>
-
               {/* User Menu */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -387,11 +329,7 @@ const AdminLayout = ({ children }) => {
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent 
-                  className="w-56 sm:w-64" 
-                  align="end"
-                  sideOffset={8}
-                >
+                <DropdownMenuContent className="w-56 sm:w-64" align="end" sideOffset={8}>
                   <DropdownMenuLabel>
                     <div className="flex flex-col space-y-1">
                       <p className="text-xs sm:text-sm font-medium leading-none truncate">
@@ -431,7 +369,8 @@ const AdminLayout = ({ children }) => {
               </DropdownMenu>
             </div>
           </header>
-
+          {/* Spacer for fixed header */}
+          <div className="h-14 sm:h-16 w-full shrink-0" />
           {/* Logout Success Alert */}
           {showLogoutSuccess && (
             <div className="fixed top-16 sm:top-20 right-3 sm:right-6 left-3 sm:left-auto z-50 animate-in slide-in-from-top-5">
@@ -443,7 +382,6 @@ const AdminLayout = ({ children }) => {
               </Alert>
             </div>
           )}
-
           {/* Main Content */}
           <main className="flex-1 overflow-auto bg-background">
             <div className="h-full w-full max-w-[1920px] mx-auto p-3 xs:p-4 sm:p-5 md:p-6 lg:p-8">

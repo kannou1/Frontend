@@ -64,60 +64,61 @@ const Notifications = () => {
     setTimeout(() => setToast(null), 3000);
   };
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const userResponse = await getUserAuth();
+      const userData = userResponse.data || userResponse;
+      setCurrentUser(userData);
 
-        const userResponse = await getUserAuth();
-        const userData = userResponse.data || userResponse;
-        setCurrentUser(userData);
-
-        const notificationsData = await getAllNotifications();
-
-        // Filter: only show relevant notifications for this admin
-        const filteredNotifications = notificationsData.filter((notif) => {
+      const notificationsData = await getAllNotifications();
+      const filteredNotifications = notificationsData
+        .filter((notif) => {
           const isDemandeType = notif.type === "demande";
           const isCreationMessage = notif.message?.includes("a demandé");
           const isForCurrentUser =
             notif.utilisateur?._id === userData._id ||
             notif.utilisateur === userData._id;
           return isDemandeType && isCreationMessage && isForCurrentUser;
-        });
+        })
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      const transformedNotifications = filteredNotifications.map((notif) => ({
+        id: notif._id,
+        type: notif.type || "demande",
+        title: notif.message?.split(".")[0] || "New Request",
+        message: notif.message || "",
+        date: new Date(notif.createdAt).toLocaleString(),
+        unread: !notif.estLu,
+        icon: getNotificationIcon(notif.type),
+        color: getNotificationColor(notif.type),
+        utilisateur: notif.utilisateur,
+        sender: notif.sender,
+        receiver: notif.receiver,
+      }));
+      setNotifications(transformedNotifications);
+    } catch (err) {
+      const errorMessage =
+        err.response?.data?.message ||
+        err.message ||
+        "Failed to load notifications";
+      setError(errorMessage);
+      showToast("error", errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        const transformedNotifications = filteredNotifications.map((notif) => ({
-          id: notif._id,
-          type: notif.type || "demande",
-          title: notif.message?.split(".")[0] || "New Request",
-          message: notif.message || "",
-          date: new Date(notif.createdAt).toLocaleString(),
-          unread: !notif.estLu,
-          icon: getNotificationIcon(notif.type),
-          color: getNotificationColor(notif.type),
-          utilisateur: notif.utilisateur,
-          sender: notif.sender,
-          receiver: notif.receiver,
-        }));
-
-        setNotifications(transformedNotifications);
-      } catch (err) {
-        const errorMessage =
-          err.response?.data?.message ||
-          err.message ||
-          "Failed to load notifications";
-        setError(errorMessage);
-        showToast("error", errorMessage);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
+  useEffect(() => { fetchData(); }, []);
+  useEffect(() => {
+    const handleUpdate = () => fetchData();
+    window.addEventListener('notificationsUpdated', handleUpdate);
+    return () => window.removeEventListener('notificationsUpdated', handleUpdate);
   }, []);
 
   const unreadCount = notifications.filter((n) => n.unread).length;
 
+  // Single notification: mark as read
   const handleMarkAsRead = async (notificationId) => {
     try {
       await markNotificationAsRead(notificationId);
@@ -136,6 +137,7 @@ const Notifications = () => {
     }
   };
 
+  // Mark all as read
   const handleMarkAllAsRead = async () => {
     try {
       const unreadNotifications = notifications.filter((n) => n.unread);
@@ -152,14 +154,15 @@ const Notifications = () => {
     }
   };
 
+  // Single notification: delete
   const handleDelete = async (notificationId) => {
     if (!window.confirm("Are you sure you want to delete this notification?")) return;
-
     try {
       await deleteNotification(notificationId);
       setNotifications((prev) =>
         prev.filter((notif) => notif.id !== notificationId)
       );
+      window.dispatchEvent(new Event("notificationsUpdated"));
       showToast("success", "Notification deleted successfully");
     } catch (err) {
       showToast(
@@ -169,6 +172,7 @@ const Notifications = () => {
     }
   };
 
+  // Delete all
   const handleDeleteAll = async () => {
     if (
       !window.confirm(
@@ -176,15 +180,14 @@ const Notifications = () => {
       )
     )
       return;
-
     try {
       if (!currentUser?.id && !currentUser?._id) {
         showToast("error", "User information not available");
         return;
       }
-
       await deleteAllNotificationsOfUser(currentUser.id || currentUser._id);
       setNotifications([]);
+      window.dispatchEvent(new Event("notificationsUpdated"));
       showToast("success", "All notifications deleted successfully");
     } catch (err) {
       showToast(
@@ -317,7 +320,7 @@ const Notifications = () => {
                               onClick={() => handleMarkAsRead(notif.id)}
                               title="Mark as read"
                             >
-                              <CheckCircle2 className="h-4 w-4" />
+                              <CheckCircle2 className="h-4 w-4 text-green-600" />
                             </Button>
                           )}
                           <Button
