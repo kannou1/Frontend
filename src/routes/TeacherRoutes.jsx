@@ -1,1 +1,0 @@
-// Teacher route definitions

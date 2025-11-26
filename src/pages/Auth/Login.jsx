@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useState, useContext } from "react";
+import { useNavigate } from "react-router-dom";
+import { AuthContext } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,7 +23,6 @@ import {
   Eye,
   EyeOff,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
@@ -29,6 +30,7 @@ const API_URL = `${API_BASE_URL}/users`;
 
 export default function Login() {
   const navigate = useNavigate();
+  const { login } = useContext(AuthContext);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -36,28 +38,20 @@ export default function Login() {
   const [errors, setErrors] = useState({});
   const [success, setSuccess] = useState("");
   const [focusedField, setFocusedField] = useState(null);
-  const [showForgotPassword, setShowForgotPassword] = useState(false);
-  const [resetEmail, setResetEmail] = useState("");
-  const [resetLoading, setResetLoading] = useState(false);
-  const [resetSuccess, setResetSuccess] = useState("");
-  const [resetError, setResetError] = useState("");
-  const [showPassword, setShowPassword] = useState(false); // added for toggle
+  const [showPassword, setShowPassword] = useState(false);
 
   const validateForm = () => {
     const newErrors = {};
-
     if (!email.trim()) {
       newErrors.email = "Email is required";
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       newErrors.email = "Invalid email address";
     }
-
     if (!password) {
       newErrors.password = "Password is required";
     } else if (password.length < 6) {
       newErrors.password = "Password must be at least 6 characters";
     }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -66,11 +60,7 @@ export default function Login() {
     e.preventDefault();
     setError("");
     setSuccess("");
-
-    if (!validateForm()) {
-      return;
-    }
-
+    if (!validateForm()) return;
     setLoading(true);
 
     try {
@@ -93,9 +83,8 @@ export default function Login() {
       }
 
       setSuccess("Login successful! Redirecting...");
-
       if (data.user) {
-        localStorage.setItem("user", JSON.stringify(data.user));
+        login(data.user); // Use context to set user state and localStorage
       }
       if (data.token) {
         localStorage.setItem("token", data.token);
@@ -105,16 +94,16 @@ export default function Login() {
         const role = data.user?.role;
         switch (role) {
           case "admin":
-            window.location.href = "/admin/";
+            navigate("/admin/", { replace: true });
             break;
           case "enseignant":
-            window.location.href = "/teacher/";
+            navigate("/teacher/", { replace: true });
             break;
           case "etudiant":
-            window.location.href = "/student/";
+            navigate("/student/", { replace: true });
             break;
           default:
-            window.location.href = "/login";
+            navigate("/login", { replace: true });
         }
       }, 1000);
     } catch (err) {
@@ -135,6 +124,10 @@ export default function Login() {
       setLoading(false);
     }
   };
+
+  // ... (rest of your UI code unchanged)
+
+
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-4 relative overflow-hidden">
