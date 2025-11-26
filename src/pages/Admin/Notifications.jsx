@@ -19,6 +19,15 @@ import {
 } from "lucide-react";
 
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+
+import {
   getAllNotifications,
   markNotificationAsRead,
   deleteNotification,
@@ -32,6 +41,17 @@ const Notifications = () => {
   const [currentUser, setCurrentUser] = useState(null);
   const [toast, setToast] = useState(null);
   const [error, setError] = useState(null);
+
+  // Dialog states for single
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [deletingNotif, setDeletingNotif] = useState(null);
+  const [deleteError, setDeleteError] = useState(null);
+  const [actionLoading, setActionLoading] = useState(false);
+
+  // Dialog states for delete all
+  const [isDeleteAllDialogOpen, setIsDeleteAllDialogOpen] = useState(false);
+  const [deleteAllError, setDeleteAllError] = useState(null);
+  const [deleteAllLoading, setDeleteAllLoading] = useState(false);
 
   const getNotificationIcon = (type) => {
     const iconMap = {
@@ -118,7 +138,7 @@ const Notifications = () => {
 
   const unreadCount = notifications.filter((n) => n.unread).length;
 
-  // Single notification: mark as read
+  // Mark single notification as read
   const handleMarkAsRead = async (notificationId) => {
     try {
       await markNotificationAsRead(notificationId);
@@ -154,46 +174,44 @@ const Notifications = () => {
     }
   };
 
-  // Single notification: delete
-  const handleDelete = async (notificationId) => {
-    if (!window.confirm("Are you sure you want to delete this notification?")) return;
+  // Handle the actual delete after confirmation (single)
+  const handleDeleteNotif = async () => {
+    if (!deletingNotif) return;
+    setActionLoading(true);
+    setDeleteError(null);
     try {
-      await deleteNotification(notificationId);
-      setNotifications((prev) =>
-        prev.filter((notif) => notif.id !== notificationId)
-      );
+      await deleteNotification(deletingNotif.id);
+      setNotifications((prev) => prev.filter((n) => n.id !== deletingNotif.id));
       window.dispatchEvent(new Event("notificationsUpdated"));
+      setIsDeleteDialogOpen(false);
+      setDeletingNotif(null);
       showToast("success", "Notification deleted successfully");
     } catch (err) {
-      showToast(
-        "error",
-        err.response?.data?.message || "Failed to delete notification"
-      );
+      setDeleteError(err.response?.data?.message || "Failed to delete notification");
+    } finally {
+      setActionLoading(false);
     }
   };
 
-  // Delete all
-  const handleDeleteAll = async () => {
-    if (
-      !window.confirm(
-        "Are you sure you want to delete ALL notifications? This action cannot be undone."
-      )
-    )
-      return;
+  // Delete all with dialog
+  const handleDeleteAllConfirm = async () => {
+    setDeleteAllLoading(true);
+    setDeleteAllError(null);
     try {
       if (!currentUser?.id && !currentUser?._id) {
-        showToast("error", "User information not available");
+        setDeleteAllError("User information not available");
+        setDeleteAllLoading(false);
         return;
       }
       await deleteAllNotificationsOfUser(currentUser.id || currentUser._id);
       setNotifications([]);
       window.dispatchEvent(new Event("notificationsUpdated"));
+      setIsDeleteAllDialogOpen(false);
       showToast("success", "All notifications deleted successfully");
     } catch (err) {
-      showToast(
-        "error",
-        err.response?.data?.message || "Failed to delete all notifications"
-      );
+      setDeleteAllError(err.response?.data?.message || "Failed to delete all notifications");
+    } finally {
+      setDeleteAllLoading(false);
     }
   };
 
@@ -245,7 +263,7 @@ const Notifications = () => {
               </Button>
             )}
             {notifications.length > 0 && (
-              <Button variant="destructive" onClick={handleDeleteAll}>
+              <Button variant="destructive" onClick={() => setIsDeleteAllDialogOpen(true)}>
                 <Trash2 className="h-4 w-4 mr-2" />
                 Delete All
               </Button>
@@ -291,60 +309,152 @@ const Notifications = () => {
             notifications.map((notif, index) => {
               const Icon = notif.icon;
               return (
-                <Card
-                  key={notif.id}
-                  style={{ animationDelay: `${index * 0.1}s` }}
-                  className="group p-6 hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 animate-scale-in border-none overflow-hidden relative"
-                >
-                  <div
-                    className={`absolute inset-0 bg-gradient-to-br ${notif.color} opacity-5 group-hover:opacity-10 transition-opacity`}
-                  />
-
-                  <div className="relative z-10 flex items-start gap-4">
+                <React.Fragment key={notif.id}>
+                  <Card
+                    style={{ animationDelay: `${index * 0.1}s` }}
+                    className="group p-6 hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 animate-scale-in border-none overflow-hidden relative"
+                  >
                     <div
-                      className={`h-12 w-12 rounded-xl bg-gradient-to-br ${notif.color} flex items-center justify-center flex-shrink-0 shadow-lg`}
-                    >
-                      <Icon className="h-6 w-6 text-white" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-start justify-between mb-2 gap-4">
-                        <h3 className="font-bold text-lg">{notif.title}</h3>
-                        <div className="flex items-center gap-2">
-                          {notif.unread && (
-                            <Badge className="bg-accent text-white">New</Badge>
-                          )}
-                          {notif.unread && (
+                      className={`absolute inset-0 bg-gradient-to-br ${notif.color} opacity-5 group-hover:opacity-10 transition-opacity`}
+                    />
+
+                    <div className="relative z-10 flex items-start gap-4">
+                      <div
+                        className={`h-12 w-12 rounded-xl bg-gradient-to-br ${notif.color} flex items-center justify-center flex-shrink-0 shadow-lg`}
+                      >
+                        <Icon className="h-6 w-6 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-start justify-between mb-2 gap-4">
+                          <h3 className="font-bold text-lg">{notif.title}</h3>
+                          <div className="flex items-center gap-2">
+                            {notif.unread && (
+                              <Badge className="bg-accent text-white">New</Badge>
+                            )}
+                            {notif.unread && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleMarkAsRead(notif.id)}
+                                title="Mark as read"
+                              >
+                                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleMarkAsRead(notif.id)}
-                              title="Mark as read"
+                              onClick={() => {
+                                setDeletingNotif(notif);
+                                setIsDeleteDialogOpen(true);
+                              }}
+                              title="Delete notification"
                             >
-                              <CheckCircle2 className="h-4 w-4 text-green-600" />
+                              <Trash2 className="h-4 w-4 text-red-600" />
                             </Button>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDelete(notif.id)}
-                            title="Delete notification"
-                          >
-                            <Trash2 className="h-4 w-4 text-red-600" />
-                          </Button>
+                          </div>
                         </div>
+                        <p className="text-sm text-muted-foreground mb-2">
+                          {notif.message}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {notif.date}
+                        </p>
                       </div>
-                      <p className="text-sm text-muted-foreground mb-2">
-                        {notif.message}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {notif.date}
-                      </p>
                     </div>
-                  </div>
-                </Card>
+                  </Card>
+                </React.Fragment>
               );
             })}
         </div>
+
+        {/* Single Delete Dialog */}
+        <Dialog
+          open={isDeleteDialogOpen}
+          onOpenChange={open => {
+            setIsDeleteDialogOpen(open);
+            if (!open) setDeleteError(null);
+            if (!open) setDeletingNotif(null);
+          }}
+        >
+          <DialogContent className="max-w-md mx-auto">
+            <DialogHeader>
+              <DialogTitle>Delete Notification</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to delete this notification? This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            {deleteError && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{deleteError}</AlertDescription>
+              </Alert>
+            )}
+            <DialogFooter className="flex-col sm:flex-row gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setIsDeleteDialogOpen(false)}
+                disabled={actionLoading}
+                className="w-full sm:w-auto"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleDeleteNotif}
+                disabled={actionLoading}
+                className="w-full sm:w-auto"
+              >
+                {actionLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Delete
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete All Dialog */}
+        <Dialog
+          open={isDeleteAllDialogOpen}
+          onOpenChange={open => {
+            setIsDeleteAllDialogOpen(open);
+            if (!open) setDeleteAllError(null);
+          }}
+        >
+          <DialogContent className="max-w-md mx-auto">
+            <DialogHeader>
+              <DialogTitle>Delete ALL Notifications</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to delete <b>ALL</b> your notifications? This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            {deleteAllError && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{deleteAllError}</AlertDescription>
+              </Alert>
+            )}
+            <DialogFooter className="flex-col sm:flex-row gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setIsDeleteAllDialogOpen(false)}
+                disabled={deleteAllLoading}
+                className="w-full sm:w-auto"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleDeleteAllConfirm}
+                disabled={deleteAllLoading}
+                className="w-full sm:w-auto"
+              >
+                {deleteAllLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Delete All
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
       </div>
     </div>
   );

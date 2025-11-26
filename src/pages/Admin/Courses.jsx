@@ -26,9 +26,25 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Plus, Search, Edit, Trash2, Users, CheckCircle2, XCircle, BookOpen, X, Loader2 } from "lucide-react";
+import {
+  Plus,
+  Search,
+  Edit,
+  Trash2,
+  Users,
+  CheckCircle2,
+  XCircle,
+  BookOpen,
+  X,
+  Loader2,
+} from "lucide-react";
 
-import { getAllCours, deleteCoursById, createCours, updateCours } from "@/services/coursService";
+import {
+  getAllCours,
+  deleteCoursById,
+  createCours,
+  updateCours,
+} from "@/services/coursService";
 import { getEnseignants } from "@/services/userService";
 import { getAllClasses } from "@/services/classeService";
 
@@ -46,6 +62,7 @@ export default function AdminCourses() {
   const [teacherSearchTerm, setTeacherSearchTerm] = useState("");
   const [editTeacherSearchTerm, setEditTeacherSearchTerm] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState({ open: false, id: null });
 
   const [formData, setFormData] = useState({
     nom: "",
@@ -61,7 +78,7 @@ export default function AdminCourses() {
   async function fetchData() {
     try {
       setLoading(true);
-      
+
       // Fetch courses
       const coursesData = await getAllCours();
       console.log("Courses loaded:", coursesData);
@@ -78,7 +95,6 @@ export default function AdminCourses() {
       const classesData = classesResponse.data || classesResponse;
       console.log("Classes loaded:", classesData);
       setClasses(classesData);
-      
     } catch (err) {
       console.error("Failed to fetch data:", err);
       showToast("error", "Failed to load data");
@@ -102,18 +118,18 @@ export default function AdminCourses() {
 
   const handleSelectChange = (name, value) => {
     console.log(`Setting ${name} to:`, value);
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const getTeacherName = (enseignantId) => {
     if (!enseignantId) return "Not assigned";
-    const teacher = teachers.find(t => (t.id || t._id) === enseignantId);
+    const teacher = teachers.find((t) => (t.id || t._id) === enseignantId);
     return teacher ? `${teacher.prenom} ${teacher.nom}` : "Not assigned";
   };
 
   const getClassName = (classeId) => {
     if (!classeId) return "Not assigned";
-    const classe = classes.find(c => (c.id || c._id) === classeId);
+    const classe = classes.find((c) => (c.id || c._id) === classeId);
     return classe ? classe.nom : "Not assigned";
   };
 
@@ -152,7 +168,10 @@ export default function AdminCourses() {
 
       // Validation
       if (!formData.nom || !formData.code || !formData.classe) {
-        showToast("error", "Please fill in required fields (Name, Code, Class)");
+        showToast(
+          "error",
+          "Please fill in required fields (Name, Code, Class)"
+        );
         return;
       }
 
@@ -173,13 +192,16 @@ export default function AdminCourses() {
       console.log("Creating course with data:", courseData);
 
       await createCours(courseData);
-      
+
       showToast("success", "Course created successfully!");
       setShowCreateDialog(false);
       fetchData(); // Refresh list
     } catch (err) {
       console.error("Failed to create course:", err);
-      showToast("error", err.response?.data?.message || "Failed to create course");
+      showToast(
+        "error",
+        err.response?.data?.message || "Failed to create course"
+      );
     } finally {
       setSubmitting(false);
     }
@@ -206,25 +228,26 @@ export default function AdminCourses() {
       console.log("Updating course with data:", courseData);
 
       await updateCours(selectedCourse._id || selectedCourse.id, courseData);
-      
+
       showToast("success", "Course updated successfully!");
       setShowEditDialog(false);
       fetchData(); // Refresh list
     } catch (err) {
       console.error("Failed to update course:", err);
-      showToast("error", err.response?.data?.message || "Failed to update course");
+      showToast(
+        "error",
+        err.response?.data?.message || "Failed to update course"
+      );
     } finally {
       setSubmitting(false);
     }
   };
 
   async function handleDelete(id) {
-    if (!confirm("Are you sure you want to delete this course?")) return;
-
     try {
       await deleteCoursById(id);
       showToast("success", "Course deleted successfully!");
-      fetchData(); // Refresh list
+      fetchData();
     } catch (err) {
       console.error("Failed to delete course:", err);
       showToast("error", "Failed to delete course");
@@ -232,7 +255,7 @@ export default function AdminCourses() {
   }
 
   // Filter teachers based on search
-  const filteredTeachers = teachers.filter(teacher => {
+  const filteredTeachers = teachers.filter((teacher) => {
     if (!teacherSearchTerm) return true;
     const searchLower = teacherSearchTerm.toLowerCase();
     return (
@@ -242,7 +265,7 @@ export default function AdminCourses() {
     );
   });
 
-  const filteredEditTeachers = teachers.filter(teacher => {
+  const filteredEditTeachers = teachers.filter((teacher) => {
     if (!editTeacherSearchTerm) return true;
     const searchLower = editTeacherSearchTerm.toLowerCase();
     return (
@@ -255,13 +278,15 @@ export default function AdminCourses() {
   // Filtering courses
   const filteredCourses = courses.filter((course) => {
     const matchesSearch =
-      (course.nom?.toLowerCase().includes(searchTerm.toLowerCase()) || false) ||
-      (course.code?.toLowerCase().includes(searchTerm.toLowerCase()) || false);
+      course.nom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      false ||
+      course.code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      false;
 
     const matchesClasse =
       filterClasse === "all" ||
-      (course.classe?._id === filterClasse) ||
-      (course.classe === filterClasse);
+      course.classe?._id === filterClasse ||
+      course.classe === filterClasse;
 
     return matchesSearch && matchesClasse;
   });
@@ -310,7 +335,9 @@ export default function AdminCourses() {
         <Card>
           <CardHeader>
             <CardTitle>All Courses</CardTitle>
-            <CardDescription>View and manage all system courses</CardDescription>
+            <CardDescription>
+              View and manage all system courses
+            </CardDescription>
           </CardHeader>
 
           <CardContent>
@@ -333,7 +360,10 @@ export default function AdminCourses() {
                 <SelectContent>
                   <SelectItem value="all">All Classes</SelectItem>
                   {classes.map((classe) => (
-                    <SelectItem key={classe._id || classe.id} value={classe._id || classe.id}>
+                    <SelectItem
+                      key={classe._id || classe.id}
+                      value={classe._id || classe.id}
+                    >
                       {classe.nom}
                     </SelectItem>
                   ))}
@@ -373,7 +403,10 @@ export default function AdminCourses() {
                       <div>
                         <p className="font-medium text-lg">{course.nom}</p>
                         <p className="text-sm text-muted-foreground">
-                          {course.code} • {getClassName(course.classe?._id || course.classe)} • {course.credits || 3} credits • S{course.semestre || 1}
+                          {course.code} •{" "}
+                          {getClassName(course.classe?._id || course.classe)} •{" "}
+                          {course.credits || 3} credits • S
+                          {course.semestre || 1}
                         </p>
                       </div>
                     </div>
@@ -381,7 +414,9 @@ export default function AdminCourses() {
                     <div className="flex items-center gap-4">
                       <div className="text-center min-w-[120px]">
                         <p className="text-sm font-medium">
-                          {getTeacherName(course.enseignant?._id || course.enseignant)}
+                          {getTeacherName(
+                            course.enseignant?._id || course.enseignant
+                          )}
                         </p>
                         <p className="text-xs text-muted-foreground">Teacher</p>
                       </div>
@@ -397,7 +432,12 @@ export default function AdminCourses() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => handleDelete(course._id || course.id)}
+                        onClick={() =>
+                          setDeleteConfirm({
+                            open: true,
+                            id: course._id || course.id,
+                          })
+                        }
                       >
                         <Trash2 className="h-4 w-4 text-red-600" />
                       </Button>
@@ -448,14 +488,19 @@ export default function AdminCourses() {
                   <Label htmlFor="classe">Class *</Label>
                   <Select
                     value={formData.classe}
-                    onValueChange={(value) => handleSelectChange("classe", value)}
+                    onValueChange={(value) =>
+                      handleSelectChange("classe", value)
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select class" />
                     </SelectTrigger>
                     <SelectContent>
                       {classes.map((classe) => (
-                        <SelectItem key={classe._id || classe.id} value={classe._id || classe.id}>
+                        <SelectItem
+                          key={classe._id || classe.id}
+                          value={classe._id || classe.id}
+                        >
                           {classe.nom}
                         </SelectItem>
                       ))}
@@ -479,7 +524,9 @@ export default function AdminCourses() {
                   <Label htmlFor="semestre">Semester *</Label>
                   <Select
                     value={formData.semestre}
-                    onValueChange={(value) => handleSelectChange("semestre", value)}
+                    onValueChange={(value) =>
+                      handleSelectChange("semestre", value)
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select" />
@@ -498,8 +545,8 @@ export default function AdminCourses() {
                 <div className="space-y-2">
                   {/* Search Input with Click Handler */}
                   <div className="relative">
-                    <Search 
-                      className="absolute left-3 top-3 h-4 w-4 text-muted-foreground cursor-pointer" 
+                    <Search
+                      className="absolute left-3 top-3 h-4 w-4 text-muted-foreground cursor-pointer"
                       onClick={() => {
                         if (!formData.enseignant && teachers.length > 0) {
                           setTeacherSearchTerm(" "); // Trigger list to show
@@ -547,14 +594,22 @@ export default function AdminCourses() {
                             key={teacher.id || teacher._id}
                             onClick={() => {
                               const teacherId = teacher.id || teacher._id;
-                              console.log("Selecting teacher:", teacherId, teacher);
+                              console.log(
+                                "Selecting teacher:",
+                                teacherId,
+                                teacher
+                              );
                               handleSelectChange("enseignant", teacherId);
                               setTeacherSearchTerm("");
                             }}
                             className="p-3 cursor-pointer hover:bg-accent transition-colors border-b last:border-b-0"
                           >
-                            <p className="font-medium">{teacher.prenom} {teacher.nom}</p>
-                            <p className="text-xs text-muted-foreground">{teacher.email}</p>
+                            <p className="font-medium">
+                              {teacher.prenom} {teacher.nom}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {teacher.email}
+                            </p>
                           </div>
                         ))
                       ) : (
@@ -581,7 +636,11 @@ export default function AdminCourses() {
             </div>
 
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowCreateDialog(false)} disabled={submitting}>
+              <Button
+                variant="outline"
+                onClick={() => setShowCreateDialog(false)}
+                disabled={submitting}
+              >
                 Cancel
               </Button>
               <Button onClick={handleCreate} disabled={submitting}>
@@ -636,14 +695,19 @@ export default function AdminCourses() {
                   <Label htmlFor="edit-classe">Class *</Label>
                   <Select
                     value={formData.classe}
-                    onValueChange={(value) => handleSelectChange("classe", value)}
+                    onValueChange={(value) =>
+                      handleSelectChange("classe", value)
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select class" />
                     </SelectTrigger>
                     <SelectContent>
                       {classes.map((classe) => (
-                        <SelectItem key={classe._id || classe.id} value={classe._id || classe.id}>
+                        <SelectItem
+                          key={classe._id || classe.id}
+                          value={classe._id || classe.id}
+                        >
                           {classe.nom}
                         </SelectItem>
                       ))}
@@ -667,7 +731,9 @@ export default function AdminCourses() {
                   <Label htmlFor="edit-semestre">Semester *</Label>
                   <Select
                     value={formData.semestre}
-                    onValueChange={(value) => handleSelectChange("semestre", value)}
+                    onValueChange={(value) =>
+                      handleSelectChange("semestre", value)
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select" />
@@ -685,7 +751,7 @@ export default function AdminCourses() {
                 <Label>Assigned Teacher (Optional)</Label>
                 <div className="space-y-2">
                   <div className="relative">
-                    <Search 
+                    <Search
                       className="absolute left-3 top-3 h-4 w-4 text-muted-foreground cursor-pointer"
                       onClick={() => {
                         if (!formData.enseignant && teachers.length > 0) {
@@ -738,8 +804,12 @@ export default function AdminCourses() {
                             }}
                             className="p-3 cursor-pointer hover:bg-accent transition-colors border-b last:border-b-0"
                           >
-                            <p className="font-medium">{teacher.prenom} {teacher.nom}</p>
-                            <p className="text-xs text-muted-foreground">{teacher.email}</p>
+                            <p className="font-medium">
+                              {teacher.prenom} {teacher.nom}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {teacher.email}
+                            </p>
                           </div>
                         ))
                       ) : (
@@ -766,7 +836,11 @@ export default function AdminCourses() {
             </div>
 
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowEditDialog(false)} disabled={submitting}>
+              <Button
+                variant="outline"
+                onClick={() => setShowEditDialog(false)}
+                disabled={submitting}
+              >
                 Cancel
               </Button>
               <Button onClick={handleUpdate} disabled={submitting}>
@@ -783,6 +857,42 @@ export default function AdminCourses() {
           </DialogContent>
         </Dialog>
       </div>
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={deleteConfirm.open}
+        onOpenChange={(open) => {
+          if (!open) setDeleteConfirm({ open: false, id: null });
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Course</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this course? This action cannot be
+              undone.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteConfirm({ open: false, id: null })}
+            >
+              Cancel
+            </Button>
+
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                await handleDelete(deleteConfirm.id);
+                setDeleteConfirm({ open: false, id: null });
+              }}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
