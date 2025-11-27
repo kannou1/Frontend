@@ -50,6 +50,7 @@ import StudentRequests from "./pages/Student/Requests";
 import StudentMessages from "./pages/Student/Messages";
 import StudentNotifications from "./pages/Student/Notifications";
 import StudentProfile from "./pages/Student/Profile";
+import Studentannoucement from "./pages/Student/announcements";
 import StudentNotFound from "./pages/Student/NotFound";
 
 const queryClient = new QueryClient();
@@ -85,6 +86,7 @@ const App = () => (
                 <Route path="exams" element={<StudentExams />} />
                 <Route path="requests" element={<StudentRequests />} />
                 <Route path="messages" element={<StudentMessages />} />
+                <Route path="announcements" element={<Studentannoucement />} />
                 <Route path="notifications" element={<StudentNotifications />} />
                 <Route path="profile" element={<StudentProfile />} />
                 <Route path="*" element={<StudentNotFound />} />

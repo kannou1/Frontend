@@ -19,7 +19,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useTheme } from "@/contexts/ThemeContext";
 import { getUserAuth } from "@/services/userService";
 import {
-  getAllNotifications,
+  getNotificationsByUser,
   deleteNotification
 } from "@/services/notificationService";
 import { useSocket } from "@/hooks/useSocket";
@@ -38,6 +38,12 @@ const StudentLayout = ({ children }) => {
   const [loadingNotifications, setLoadingNotifications] = useState(true);
 
   const audioRef = useRef(null);
+
+  const storedUser = typeof window !== "undefined"
+    ? JSON.parse(localStorage.getItem("user") || "{}")
+    : {};
+
+  const socket = useSocket(storedUser._id);
 
   // Get student for avatar
   useEffect(() => {
@@ -60,70 +66,150 @@ const StudentLayout = ({ children }) => {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Notification sound
+  // Notification sound setup
   useEffect(() => {
+    // Try to load the audio file
     audioRef.current = new Audio('/sounds/notification.mp3');
     audioRef.current.volume = 0.5;
+    audioRef.current.preload = 'auto';
+    
+    // Handle loading errors
+    audioRef.current.onerror = (e) => {
+      console.error('Audio loading error:', e);
+      // Fallback: try different path or use a data URL for a beep sound
+      audioRef.current = null;
+    };
+    
     const unlockAudio = () => {
       if (audioRef.current) {
         audioRef.current.play().then(() => {
           audioRef.current.pause();
           audioRef.current.currentTime = 0;
-        }).catch(() => {});
+          console.log('Audio unlocked successfully');
+        }).catch((err) => {
+          console.error('Audio unlock failed:', err);
+        });
         document.removeEventListener('click', unlockAudio);
+        document.removeEventListener('touchstart', unlockAudio);
       }
     };
+    
     document.addEventListener('click', unlockAudio);
+    document.addEventListener('touchstart', unlockAudio);
+    
     return () => {
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current = null;
       }
       document.removeEventListener('click', unlockAudio);
+      document.removeEventListener('touchstart', unlockAudio);
     };
   }, []);
 
-  // Notifications, real-time (socket optional)
-  const storedUser = typeof window !== "undefined"
-    ? JSON.parse(localStorage.getItem("user") || "{}")
-    : {};
-  const socket = useSocket(storedUser._id);
-
-  useEffect(() => { fetchNotifications(); }, []);
+  // Listen to custom event to trigger fetch everywhere (dropdown and notif page)
+  // But debounce to avoid fetching immediately after socket update
   useEffect(() => {
-    const handler = () => fetchNotifications();
+    let timeoutId;
+    const handler = () => {
+      // Debounce fetch to avoid immediate refetch after socket update
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        fetchNotifications();
+      }, 500);
+    };
     window.addEventListener('notificationsUpdated', handler);
-    return () => window.removeEventListener('notificationsUpdated', handler);
+    return () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener('notificationsUpdated', handler);
+    };
   }, []);
 
-  // Real-time updates
+  // Initial fetch
+  useEffect(() => { 
+    fetchNotifications(); 
+  }, []);
+
+  // Real-time updates (socket): update & update everywhere by firing event
   useEffect(() => {
-    if (!socket) return;
+    if (!socket) {
+      console.log('Socket not connected');
+      return;
+    }
+    
+    console.log('Socket connected, setting up listener');
+    
     const handleNewNotification = (notification) => {
+      console.log('🔔 Received notification via socket:', notification);
+      console.log('Notification user ID:', notification.utilisateur?._id || notification.utilisateur);
+      console.log('Current user ID:', storedUser._id);
+      
+      // Check if notification is for current user
+      const notifUserId = notification.utilisateur?._id || notification.utilisateur;
+      if (notifUserId && storedUser._id && notifUserId !== storedUser._id) {
+        console.log('Notification not for current user, ignoring');
+        return;
+      }
+      
+      console.log('Processing notification for current user');
+      
       setNotifications(prev => {
         const newNotification = {
-          id: notification._id || Date.now(),
-          message: notification.message,
-          date: formatDate(notification.createdAt),
-          unread: !notification.estLu,
+          id: notification._id || `temp-${Date.now()}`,
+          message: notification.message || "New notification",
+          date: formatDate(notification.createdAt || new Date()),
+          unread: true, // Always mark new notifications as unread
         };
+        
         const isDuplicate = prev.some(n => n.id === newNotification.id);
-        if (isDuplicate) return prev;
+        if (isDuplicate) {
+          console.log('Duplicate notification detected, skipping');
+          return prev;
+        }
+        
+        console.log('Adding new notification to state:', newNotification);
+        
+        // Play sound
         playNotificationSound();
-        return [newNotification, ...prev].sort((a, b) => new Date(b.date) - new Date(a.date));
+        
+        // Add to beginning of array
+        return [newNotification, ...prev];
       });
+      
+      // Fire event to update other components (like notifications page)
+      console.log('Firing notificationsUpdated event');
       window.dispatchEvent(new Event("notificationsUpdated"));
     };
+    
     socket.on('receiveNotification', handleNewNotification);
-    return () => { socket.off('receiveNotification', handleNewNotification); };
-  }, [socket]);
+    
+    return () => { 
+      console.log('Cleaning up socket listener');
+      socket.off('receiveNotification', handleNewNotification); 
+    };
+  }, [socket, storedUser._id]);
 
   const playNotificationSound = () => {
-    if (!audioRef.current) return;
+    console.log('Attempting to play notification sound');
+    if (!audioRef.current) {
+      console.warn('Audio not initialized');
+      return;
+    }
     try {
       audioRef.current.currentTime = 0;
-      audioRef.current.play().catch(() => {});
-    } catch {}
+      const playPromise = audioRef.current.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            console.log('Sound played successfully');
+          })
+          .catch((err) => {
+            console.error('Sound play failed:', err);
+          });
+      }
+    } catch (err) {
+      console.error('Sound play exception:', err);
+    }
   };
 
   const fetchNotifications = async () => {
@@ -132,11 +218,12 @@ const StudentLayout = ({ children }) => {
       const userResponse = await getUserAuth();
       const userData = userResponse.data || userResponse;
 
-      // Student: only those for THIS student, or some filtering
-      const notificationsData = await getAllNotifications();
-      // You may want to change this to match your backend logic for students
-      const filtered = notificationsData
-        .filter(notif => notif.utilisateur?._id === userData._id || notif.utilisateur === userData._id)
+      // Use getNotificationsByUser instead of getAllNotifications
+      const notificationsData = await getNotificationsByUser(userData._id || userData.id);
+      console.log('Fetched notifications:', notificationsData);
+      
+      // Transform and sort notifications
+      const transformed = notificationsData
         .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
         .map(notif => ({
           id: notif._id,
@@ -144,8 +231,11 @@ const StudentLayout = ({ children }) => {
           date: formatDate(notif.createdAt),
           unread: !notif.estLu,
         }));
-      setNotifications(filtered);
+      
+      console.log('Transformed notifications:', transformed);
+      setNotifications(transformed);
     } catch (err) {
+      console.error('Error fetching notifications:', err);
       setNotifications([]);
     } finally {
       setLoadingNotifications(false);
@@ -169,6 +259,7 @@ const StudentLayout = ({ children }) => {
 
   const unreadCount = notifications.filter(n => n.unread).length;
 
+  // Delete and update badge in real-time, then tell all listeners
   const handleDeleteNotification = async (notifId) => {
     try {
       await deleteNotification(notifId);
@@ -251,6 +342,7 @@ const StudentLayout = ({ children }) => {
                   : <Moon className="h-4 w-4 sm:h-5 sm:w-5" />
                 }
               </Button>
+              {/* Notifications */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -288,6 +380,7 @@ const StudentLayout = ({ children }) => {
                         No new notifications
                       </div>
                     )}
+                    {/* SHOW ONLY LAST 3 */}
                     {notifications.slice(0, 3).map((notif) => (
                       <div
                         key={notif.id}
@@ -330,6 +423,7 @@ const StudentLayout = ({ children }) => {
                   </div>
                 </DropdownMenuContent>
               </DropdownMenu>
+              {/* User Menu */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="relative h-8 w-8 sm:h-9 sm:w-9 rounded-full touch-manipulation">
@@ -379,7 +473,9 @@ const StudentLayout = ({ children }) => {
               </DropdownMenu>
             </div>
           </header>
+          {/* Spacer for fixed header */}
           <div className="h-14 sm:h-16 w-full shrink-0" />
+          {/* Logout Success Alert */}
           {showLogoutSuccess && (
             <div className="fixed top-16 sm:top-20 right-3 sm:right-6 left-3 sm:left-auto z-50 animate-in slide-in-from-top-5">
               <Alert className="bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800 text-green-900 dark:text-green-100 shadow-lg">
@@ -390,6 +486,7 @@ const StudentLayout = ({ children }) => {
               </Alert>
             </div>
           )}
+          {/* Main Content */}
           <main className="flex-1 overflow-auto bg-background">
             <div className="h-full w-full max-w-[1920px] mx-auto p-3 xs:p-4 sm:p-5 md:p-6 lg:p-8">
               <Outlet />

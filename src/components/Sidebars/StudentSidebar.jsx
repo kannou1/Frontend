@@ -9,6 +9,7 @@ import {
   Send,
   MessageSquare,
   Bell,
+  Megaphone,
 } from "lucide-react";
 import {
   Sidebar,
@@ -22,6 +23,7 @@ import {
   SidebarHeader,
   SidebarFooter,
   useSidebar,
+  
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getUserAuth } from "@/services/userService";
@@ -34,6 +36,7 @@ const navItems = [
   { path: "timetable", label: "Timetable", icon: Calendar },
   { path: "exams", label: "Exams & Notes", icon: FileText },
   { path: "attendance", label: "Attendance", icon: UserCheck },
+  { path: "announcements", label: "Announcements", icon: Megaphone }, 
   { path: "requests", label: "Requests", icon: Send },
   { path: "messages", label: "Messages", icon: MessageSquare },
   { path: "notifications", label: "Notifications", icon: Bell },
