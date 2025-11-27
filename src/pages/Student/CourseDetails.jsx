@@ -276,19 +276,29 @@ const StudentCourseDetails = ({ token }) => {
             ) : course.exams.length > 0 ? (
               <div className="grid gap-6">
                 {course.exams.map((e, i) => {
-                  const date = e.date ? new Date(e.date) : null;
+                  const now = new Date();
+                  const examDate = e.date ? new Date(e.date) : null;
+
+                  // Determine status based on date
+                  let status = "TBA";
+                  if (examDate) {
+                    status = examDate > now ? "Upcoming" : "Completed";
+                  }
+
                   const formattedDate =
-                    date?.toLocaleDateString("fr-FR", {
+                    examDate?.toLocaleDateString("fr-FR", {
                       weekday: "long",
                       year: "numeric",
                       month: "long",
                       day: "numeric",
                     }) || "TBA";
+
                   const formattedTime =
-                    date?.toLocaleTimeString("fr-FR", {
+                    examDate?.toLocaleTimeString("fr-FR", {
                       hour: "2-digit",
                       minute: "2-digit",
                     }) || "TBA";
+
                   return (
                     <Card
                       key={i}
@@ -321,18 +331,29 @@ const StudentCourseDetails = ({ token }) => {
                             )}
                           </div>
                         </div>
-                        <div className="flex justify-end">
+                        <div className="flex justify-end flex-col sm:flex-row gap-2">
                           <Badge
                             className={
-                              e.status === "scheduled"
+                              status === "Upcoming"
                                 ? "bg-amber-500 text-white"
-                                : e.status === "completed"
+                                : status === "Completed"
                                 ? "bg-emerald-500 text-white"
                                 : "bg-gray-400 text-white"
                             }
                           >
-                            {e.status?.toUpperCase() || "SCHEDULED"}
+                            {status.toUpperCase()}
                           </Badge>
+
+                          {e.notes && e.notes.length > 0 && (
+                            <Button
+                              className="ml-2 bg-blue-500 text-white hover:bg-blue-600"
+                              onClick={() =>
+                                alert("Here you will see the notes!")
+                              }
+                            >
+                              View Notes
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </Card>
