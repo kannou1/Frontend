@@ -51,8 +51,16 @@ import StudentMessages from "./pages/Student/Messages";
 import StudentNotifications from "./pages/Student/Notifications";
 import StudentProfile from "./pages/Student/Profile";
 import Studentannoucement from "./pages/Student/announcements";
+import StudentCourseDetails from "./pages/Student/CourseDetails";
 import StudentNotFound from "./pages/Student/NotFound";
 
+// Wrapper to extract courseId from URL params
+import { useParams } from "react-router-dom";
+
+const CourseDetailsPageWrapper = () => {
+  const { courseId } = useParams();
+  return <CourseDetailsPage courseId={courseId} />;
+};
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -87,8 +95,13 @@ const App = () => (
                 <Route path="requests" element={<StudentRequests />} />
                 <Route path="messages" element={<StudentMessages />} />
                 <Route path="announcements" element={<Studentannoucement />} />
-                <Route path="notifications" element={<StudentNotifications />} />
+                <Route
+                  path="notifications"
+                  element={<StudentNotifications />}
+                />
                 <Route path="profile" element={<StudentProfile />} />
+                {/* ✅ Corrected relative route */}
+                <Route path="courses/:id" element={<StudentCourseDetails />} />
                 <Route path="*" element={<StudentNotFound />} />
               </Route>
 
@@ -108,7 +121,10 @@ const App = () => (
                 <Route path="attendance" element={<TeacherAttendance />} />
                 <Route path="schedule" element={<TeacherSchedule />} />
                 <Route path="messages" element={<TeacherMessages />} />
-                <Route path="notifications" element={<TeacherNotifications />} />
+                <Route
+                  path="notifications"
+                  element={<TeacherNotifications />}
+                />
                 <Route path="profile" element={<TeacherProfile />} />
                 <Route path="*" element={<StudentNotFound />} />
               </Route>
