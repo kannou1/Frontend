@@ -1,32 +1,52 @@
-import axios from 'axios';
+import axios from "axios";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
-const API_URL = `${API_BASE_URL}/emploiDuTemps`;
+// Base URL of your backend
+const API_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api/emploiDuTemps";
 
-// Get all emploi du temps
-export async function getAllEmploiDuTemps() {
-  return await axios.get(`${API_URL}/getAllEmploiDuTemps`, {
-    withCredentials: true,
+// 🟢 Create an emploi du temps
+export const createEmploi = async (data, token) => {
+  const res = await axios.post(`${API_URL}/create`, data, {
+    headers: { Authorization: `Bearer ${token}` },
   });
-}
+  return res.data;
+};
 
-// Get emploi du temps by ID
-export async function getEmploiDuTempsById(id) {
-  return await axios.get(`${API_URL}/getEmploiDuTempsById/${id}`, {
-    withCredentials: true,
+// 🔍 Get all emplois du temps
+export const getAllEmplois = async (token) => {
+  const res = await axios.get(`${API_URL}/getAll`, {
+    headers: { Authorization: `Bearer ${token}` },
   });
-}
+  return res.data;
+};
 
-// Delete emploi du temps by ID
-export async function deleteEmploiDuTempsById(id) {
-  return await axios.delete(`${API_URL}/deleteEmploiDuTemps/${id}`, {
-    withCredentials: true,
+// 🔍 Get emploi du temps by ID
+export const getEmploiById = async (id, token) => {
+  const res = await axios.get(`${API_URL}/getById/${id}`, {
+    headers: { Authorization: `Bearer ${token}` },
   });
-}
+  return res.data;
+};
 
-// Delete all emploi du temps
-export async function deleteAllEmploiDuTemps() {
-  return await axios.delete(`${API_URL}/deleteAllEmploiDuTemps`, {
-    withCredentials: true,
+// ✏️ Update an emploi du temps
+export const updateEmploi = async (id, data, token) => {
+  const res = await axios.put(`${API_URL}/update/${id}`, data, {
+    headers: { Authorization: `Bearer ${token}` },
   });
-}
+  return res.data;
+};
+
+// ❌ Delete an emploi du temps
+export const deleteEmploi = async (id, token) => {
+  const res = await axios.delete(`${API_URL}/delete/${id}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return res.data;
+};
+
+// ❌ Delete all emplois du temps
+export const deleteAllEmplois = async (token) => {
+  const res = await axios.delete(`${API_URL}/deleteAll`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return res.data;
+};
