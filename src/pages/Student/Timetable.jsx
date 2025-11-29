@@ -13,35 +13,63 @@ const Timetable = () => {
   const [loading, setLoading] = useState(true);
 
   const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
-  const timeSlots = ["08:00","09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00"];
+  const timeSlots = [
+    "08:00", "09:00", "10:00", "11:00", "12:00",
+    "13:00", "14:00", "15:00", "16:00", "17:00"
+  ];
 
   useEffect(() => {
     const fetchSchedule = async () => {
       try {
         setLoading(true);
-        const token = localStorage.getItem("token"); // if you use JWT
-        const res = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/emploi/getAll`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
 
-        // Transform data into a nested object for easier rendering
+        const token = localStorage.getItem("token");
+
+        const res = await axios.get(
+          `${import.meta.env.VITE_API_BASE_URL}/emploiDuTemps/getAll`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+
+        console.log("API RESPONSE:", res.data);
+
+        // The backend returns emplois du temps with populated seances
+        const emplois = Array.isArray(res.data) ? res.data : [];
+
         const scheduleData = {};
-        res.data.forEach((emploi) => {
-          const day = emploi.jourSemaine;
-          if (!scheduleData[day]) scheduleData[day] = {};
-          scheduleData[day][emploi.heureDebut] = {
-            course: emploi.cours[0]?.nom || "Unknown Course",
-            room: emploi.salle,
-            duration: calculateDuration(emploi.heureDebut, emploi.heureFin),
-            instructor: emploi.cours[0]?.enseignantId?.prenom + " " + emploi.cours[0]?.enseignantId?.nom || "Unknown",
-            type: emploi.typeCours,
-          };
+
+        // Process each emploi du temps and its seances
+        emplois.forEach((emploi) => {
+          const seances = emploi.seances || emploi.sessions || [];
+          if (seances && Array.isArray(seances)) {
+            seances.forEach((seance) => {
+              const day = seance.jourSemaine;
+              if (!scheduleData[day]) scheduleData[day] = {};
+
+              // Get course name and instructor from populated data
+              const courseName = seance.cours?.nom || seance.cours?.name || "Unknown Course";
+              const instructorName = seance.cours?.enseignant
+                ? `${seance.cours.enseignant.prenom || ""} ${seance.cours.enseignant.nom || ""}`.trim()
+                : "Instructor";
+
+              scheduleData[day][seance.heureDebut] = {
+                course: courseName,
+                room: seance.salle,
+                duration: calculateDuration(seance.heureDebut, seance.heureFin),
+                instructor: instructorName || "Instructor",
+                type: seance.typeCours,
+                emploiTitre: emploi.titre,
+                classe: emploi.classe?.nom || "Unknown Class",
+                seanceId: seance._id,
+                emploiId: emploi._id,
+              };
+            });
+          }
         });
 
         setSchedule(scheduleData);
-        setLoading(false);
       } catch (err) {
         console.error("Error fetching schedule:", err);
+      } finally {
         setLoading(false);
       }
     };
@@ -77,6 +105,7 @@ const Timetable = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-secondary/5">
       <div className="container mx-auto p-6 md:p-8">
+
         {/* Header */}
         <div className="mb-8 animate-fade-in">
           <h1 className="text-4xl md:text-5xl font-bold mb-3 bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent">
@@ -97,10 +126,12 @@ const Timetable = () => {
               <ChevronLeft className="h-4 w-4" />
               Previous Week
             </Button>
+
             <div className="text-center">
               <p className="text-sm text-muted-foreground">Current Week</p>
               <p className="font-semibold">Fall 2025 - Week {Math.abs(currentWeek) + 1}</p>
             </div>
+
             <Button
               variant="outline"
               size="sm"
@@ -116,6 +147,8 @@ const Timetable = () => {
         {/* Schedule Grid */}
         <div className="animate-scale-in">
           <div className="w-full max-w-none">
+
+            {/* Days */}
             <div className="grid grid-cols-6 gap-2 mb-4">
               <div className="font-semibold text-sm text-muted-foreground text-center">Time</div>
               {days.map((day, index) => (
@@ -124,23 +157,28 @@ const Timetable = () => {
                   className={`text-center ${getTodayIndex() === index ? "text-primary font-bold" : "font-semibold"}`}
                 >
                   <div className="text-sm mb-1">{day}</div>
-                  {getTodayIndex() === index && <Badge className="bg-primary text-white text-xs">Today</Badge>}
+                  {getTodayIndex() === index && (
+                    <Badge className="bg-primary text-white text-xs">Today</Badge>
+                  )}
                 </div>
               ))}
             </div>
 
+            {/* Rows */}
             {timeSlots.map((time) => (
               <div key={time} className="grid grid-cols-6 gap-2 items-start mb-2">
                 <div className="font-medium text-sm text-muted-foreground text-center py-2">{time}</div>
+
                 {days.map((day) => {
                   const courseData = schedule[day]?.[time];
+
                   if (courseData) {
                     return (
                       <Card
                         key={`${day}-${time}`}
                         style={{ gridRow: `span ${courseData.duration}` }}
                         onClick={() => setSelectedCourse({ ...courseData, day, time })}
-                        className={`group p-2 cursor-pointer hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border overflow-hidden relative animate-fade-in min-h-[80px]`}
+                        className="group p-2 cursor-pointer hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border overflow-hidden relative animate-fade-in min-h-[80px]"
                       >
                         <div
                           className={`absolute inset-0 bg-gradient-to-br ${getCellClass(courseData.course)} opacity-90 group-hover:opacity-100 transition-opacity`}
@@ -148,14 +186,19 @@ const Timetable = () => {
                         <div className="relative z-10 text-white">
                           <div className="flex items-start justify-between mb-2">
                             <BookOpen className="h-5 w-5 flex-shrink-0" />
-                            <Badge className="bg-white/20 text-white text-xs backdrop-blur-sm">{courseData.type}</Badge>
+                            <Badge className="bg-white/20 text-white text-xs backdrop-blur-sm">
+                              {courseData.type}
+                            </Badge>
                           </div>
+
                           <h4 className="font-bold mb-2 text-sm leading-tight">{courseData.course}</h4>
+
                           <div className="space-y-1 text-xs opacity-90">
                             <div className="flex items-center gap-1">
                               <MapPin className="h-3 w-3" />
                               <span>{courseData.room}</span>
                             </div>
+
                             <div className="flex items-center gap-1">
                               <Clock className="h-3 w-3" />
                               <span>{courseData.duration}h</span>
@@ -165,6 +208,7 @@ const Timetable = () => {
                       </Card>
                     );
                   }
+
                   return <div key={`${day}-${time}`} />;
                 })}
               </div>
@@ -172,7 +216,7 @@ const Timetable = () => {
           </div>
         </div>
 
-        {/* Course Dialog */}
+        {/* Dialog */}
         <Dialog open={!!selectedCourse} onOpenChange={() => setSelectedCourse(null)}>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
@@ -183,7 +227,10 @@ const Timetable = () => {
 
             {selectedCourse && (
               <div className="space-y-6 mt-4">
+
+                {/* Info cards */}
                 <div className="grid grid-cols-2 gap-4">
+
                   <Card className="p-4 border-none bg-gradient-to-br from-primary/10 to-primary/5">
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
@@ -191,10 +238,13 @@ const Timetable = () => {
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Day & Time</p>
-                        <p className="font-semibold">{selectedCourse.day}, {selectedCourse.time}</p>
+                        <p className="font-semibold">
+                          {selectedCourse.day}, {selectedCourse.time}
+                        </p>
                       </div>
                     </div>
                   </Card>
+
                   <Card className="p-4 border-none bg-gradient-to-br from-secondary/10 to-secondary/5">
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-secondary to-accent flex items-center justify-center">
@@ -206,6 +256,7 @@ const Timetable = () => {
                       </div>
                     </div>
                   </Card>
+
                   <Card className="p-4 border-none bg-gradient-to-br from-accent/10 to-accent/5">
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-accent to-primary flex items-center justify-center">
@@ -217,6 +268,7 @@ const Timetable = () => {
                       </div>
                     </div>
                   </Card>
+
                   <Card className="p-4 border-none bg-gradient-to-br from-primary/10 to-accent/10">
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
@@ -230,6 +282,7 @@ const Timetable = () => {
                   </Card>
                 </div>
 
+                {/* Instructor */}
                 <Card className="p-5 border-none bg-muted/50">
                   <div className="flex items-center gap-3 mb-3">
                     <div className="h-12 w-12 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
@@ -242,6 +295,7 @@ const Timetable = () => {
                   </div>
                 </Card>
 
+                {/* Buttons */}
                 <div className="flex gap-3 pt-4">
                   <Button className="flex-1 bg-gradient-to-r from-primary via-secondary to-accent hover:opacity-90">
                     View Course Details
@@ -250,10 +304,12 @@ const Timetable = () => {
                     Set Reminder
                   </Button>
                 </div>
+
               </div>
             )}
           </DialogContent>
         </Dialog>
+
       </div>
     </div>
   );

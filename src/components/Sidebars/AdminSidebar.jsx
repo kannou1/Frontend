@@ -11,6 +11,7 @@ import {
   Bell,
   Megaphone,
   FileText,
+  Calendar,
 } from "lucide-react";
 import {
   Sidebar,
@@ -32,8 +33,9 @@ const navItems = [
   { path: "users", label: "Users", icon: Users },
   { path: "classes", label: "Classes", icon: BookOpen },
   { path: "courses", label: "Courses", icon: NotebookPen },
+  { path: "timetable", label: "Timetable", icon: Calendar },
   { path: "requests", label: "Requests", icon: FileText },
-  { path: "announcements", label: "Announcements", icon: Megaphone }, 
+  { path: "announcements", label: "Announcements", icon: Megaphone },
   { path: "messages", label: "Messages", icon: MessageSquare },
   { path: "notifications", label: "Notifications", icon: Bell },
 ];

@@ -26,6 +26,7 @@ import AdminProfile from "./pages/Admin/Profile";
 import AdminNotifications from "./pages/Admin/Notifications";
 import AdminAnnouncements from "./pages/Admin/announcements";
 import AdminDemandes from "@/pages/Admin/demandes";
+import AdminTimetable from "@/pages/Admin/Timetable";
 
 // Teacher Section
 import TeacherLayout from "./pages/Teacher/Layout";
@@ -98,7 +99,7 @@ const App = () => (
                 <Route
                   path="notifications"
                   element={<StudentNotifications />}
-                />
+                />  
                 <Route path="profile" element={<StudentProfile />} />
                 {/* ✅ Corrected relative route */}
                 <Route path="courses/:id" element={<StudentCourseDetails />} />
@@ -147,6 +148,7 @@ const App = () => (
                 <Route path="messages" element={<AdminMessages />} />
                 <Route path="notifications" element={<AdminNotifications />} />
                 <Route path="requests" element={<AdminDemandes />} />
+                <Route path="timetable" element={<AdminTimetable />} />
                 <Route path="announcements" element={<AdminAnnouncements />} />
                 <Route path="profile" element={<AdminProfile />} />
                 <Route path="*" element={<StudentNotFound />} />
