@@ -219,6 +219,22 @@ export default function AdminTimetable() {
     setShowCreateSeanceDialog(true);
   };
 
+  // Get courses for selected emploi's class
+  const getCoursesForSelectedClass = () => {
+    if (!selectedEmploi) return [];
+    
+    const classeId = typeof selectedEmploi.classe === 'object' 
+      ? (selectedEmploi.classe?._id || selectedEmploi.classe?.id)
+      : selectedEmploi.classe;
+    
+    return courses.filter((cours) => {
+      const coursClasseId = typeof cours.classe === 'object'
+        ? (cours.classe?._id || cours.classe?.id)
+        : cours.classe;
+      return coursClasseId === classeId;
+    });
+  };
+
   // ---------------------------
   // Create Emploi
   // ---------------------------
@@ -359,8 +375,14 @@ export default function AdminTimetable() {
     const matchesSearch = emploi.titre
       ?.toLowerCase()
       .includes(searchTerm.toLowerCase());
+    
+    // Extract the class ID from emploi.classe (could be object or string)
+    const emploiClasseId = typeof emploi.classe === 'object' 
+      ? (emploi.classe?._id || emploi.classe?.id)
+      : emploi.classe;
+    
     const matchesClasse =
-      filterClasse === "all" || emploi.classe === filterClasse;
+      filterClasse === "all" || emploiClasseId === filterClasse;
     return matchesSearch && matchesClasse;
   });
 
@@ -573,15 +595,23 @@ export default function AdminTimetable() {
                                         Course
                                       </p>
                                       <p className="font-medium">
-                                        {getCourseName(seance.cours)}
+                                        {getCourseName(seance.cours?._id || seance.cours)}
                                       </p>
                                     </div>
                                     <div>
                                       <p className="text-sm text-muted-foreground">
-                                        Type
+                                        Class
                                       </p>
                                       <p className="font-medium">
-                                        {seance.typeCours}
+                                        {getClassName(seance.classe)}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="text-sm text-muted-foreground">
+                                        Type & Room
+                                      </p>
+                                      <p className="font-medium">
+                                        {seance.typeCours} • {seance.salle}
                                       </p>
                                     </div>
                                     <div>
@@ -591,14 +621,6 @@ export default function AdminTimetable() {
                                       <p className="font-medium">
                                         {seance.jourSemaine} •{" "}
                                         {seance.heureDebut} - {seance.heureFin}
-                                      </p>
-                                    </div>
-                                    <div>
-                                      <p className="text-sm text-muted-foreground">
-                                        Room
-                                      </p>
-                                      <p className="font-medium">
-                                        {seance.salle}
                                       </p>
                                     </div>
                                   </div>
@@ -765,11 +787,17 @@ export default function AdminTimetable() {
                     <SelectValue placeholder="Select course" />
                   </SelectTrigger>
                   <SelectContent>
-                    {courses.map((cours) => (
-                      <SelectItem key={cours._id} value={cours._id}>
-                        {cours.nom}
-                      </SelectItem>
-                    ))}
+                    {getCoursesForSelectedClass().length === 0 ? (
+                      <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                        No courses available for this class
+                      </div>
+                    ) : (
+                      getCoursesForSelectedClass().map((cours) => (
+                        <SelectItem key={cours._id} value={cours._id}>
+                          {cours.nom}
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>
