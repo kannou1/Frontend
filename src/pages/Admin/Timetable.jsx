@@ -44,11 +44,13 @@ import {
 import {
   getAllEmplois,
   createEmploi,
+  updateEmploi,
   deleteEmploi,
 } from "@/services/emploiDuTempsService";
 import {
   getAllSeances,
   createSeance,
+  updateSeance,
   deleteSeance,
 } from "@/services/seanceService";
 import { getAllClasses } from "@/services/classeService";
@@ -62,9 +64,16 @@ export default function AdminTimetable() {
   const [classes, setClasses] = useState([]);
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
+  
+  // Dialog states
   const [showCreateEmploiDialog, setShowCreateEmploiDialog] = useState(false);
   const [showCreateSeanceDialog, setShowCreateSeanceDialog] = useState(false);
+  const [showUpdateEmploiDialog, setShowUpdateEmploiDialog] = useState(false);
+  const [showUpdateSeanceDialog, setShowUpdateSeanceDialog] = useState(false);
+  
   const [selectedEmploi, setSelectedEmploi] = useState(null);
+  const [editingEmploi, setEditingEmploi] = useState(null);
+  const [editingSeance, setEditingSeance] = useState(null);
   const [expandedEmplois, setExpandedEmplois] = useState(new Set());
   const [toast, setToast] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -156,16 +165,12 @@ export default function AdminTimetable() {
 
   const getClassName = (classeRef) => {
     if (!classeRef) return "Not assigned";
-
     let id = classeRef;
     if (typeof classeRef === "object") id = classeRef._id || classeRef.id;
-
-    // Try both _id and string match
     const classe =
       classes.find(
         (c) => c._id === id || c.id === id || c._id === String(id)
       ) || null;
-
     return classe ? classe.nom : "Not assigned";
   };
 
@@ -192,6 +197,9 @@ export default function AdminTimetable() {
     setExpandedEmplois(newExpanded);
   };
 
+  // ---------------------------
+  // Create Emploi Handlers
+  // ---------------------------
   const openCreateEmploiDialog = () => {
     setEmploiFormData({
       titre: "",
@@ -203,41 +211,6 @@ export default function AdminTimetable() {
     setShowCreateEmploiDialog(true);
   };
 
-  const openCreateSeanceDialog = (emploi) => {
-    setSelectedEmploi(emploi);
-    setSeanceFormData({
-      jourSemaine: "",
-      heureDebut: "",
-      heureFin: "",
-      salle: "",
-      typeCours: "",
-      cours: "",
-      classe: emploi.classe,
-      emploiDuTemps: emploi._id,
-      notes: "",
-    });
-    setShowCreateSeanceDialog(true);
-  };
-
-  // Get courses for selected emploi's class
-  const getCoursesForSelectedClass = () => {
-    if (!selectedEmploi) return [];
-    
-    const classeId = typeof selectedEmploi.classe === 'object' 
-      ? (selectedEmploi.classe?._id || selectedEmploi.classe?.id)
-      : selectedEmploi.classe;
-    
-    return courses.filter((cours) => {
-      const coursClasseId = typeof cours.classe === 'object'
-        ? (cours.classe?._id || cours.classe?.id)
-        : cours.classe;
-      return coursClasseId === classeId;
-    });
-  };
-
-  // ---------------------------
-  // Create Emploi
-  // ---------------------------
   const handleCreateEmploi = async () => {
     try {
       setSubmitting(true);
@@ -271,8 +244,83 @@ export default function AdminTimetable() {
   };
 
   // ---------------------------
-  // Create Seance
+  // Update Emploi Handlers
   // ---------------------------
+  const openUpdateEmploiDialog = (emploi) => {
+    setEditingEmploi(emploi);
+    
+    // Extract classe ID if it's an object
+    const classeId = typeof emploi.classe === 'object' 
+      ? (emploi.classe?._id || emploi.classe?.id)
+      : emploi.classe;
+    
+    setEmploiFormData({
+      titre: emploi.titre || "",
+      description: emploi.description || "",
+      classe: classeId || "",
+      dateDebut: emploi.dateDebut ? emploi.dateDebut.split('T')[0] : "",
+      dateFin: emploi.dateFin ? emploi.dateFin.split('T')[0] : "",
+    });
+    setShowUpdateEmploiDialog(true);
+  };
+
+  const handleUpdateEmploi = async () => {
+    try {
+      setSubmitting(true);
+      const token = localStorage.getItem("token");
+      if (!token) return showToast("error", "Authentication required");
+
+      if (
+        !emploiFormData.titre ||
+        !emploiFormData.classe ||
+        !emploiFormData.dateDebut ||
+        !emploiFormData.dateFin
+      )
+        return showToast(
+          "error",
+          "Please fill in required fields"
+        );
+
+      const emploiId = editingEmploi._id || editingEmploi.id;
+      const updatedEmploi = await updateEmploi(emploiId, emploiFormData, token);
+      
+      setEmplois((prev) =>
+        prev.map((e) => ((e._id || e.id) === emploiId ? updatedEmploi : e))
+      );
+      
+      showToast("success", "Timetable updated successfully!");
+      setShowUpdateEmploiDialog(false);
+      setEditingEmploi(null);
+    } catch (err) {
+      console.error(err);
+      showToast(
+        "error",
+        err.response?.data?.message || "Failed to update timetable"
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // ---------------------------
+  // Create Seance Handlers
+  // ---------------------------
+  const openCreateSeanceDialog = (emploi) => {
+    setSelectedEmploi(emploi);
+    setSeanceFormData({
+      jourSemaine: "",
+      heureDebut: "",
+      heureFin: "",
+      salle: "",
+      typeCours: "",
+      cours: "",
+      classe: emploi.classe,
+      emploiDuTemps: emploi._id,
+      notes: "",
+    });
+    setShowCreateSeanceDialog(true);
+  };
+
   const handleCreateSeance = async () => {
     try {
       setSubmitting(true);
@@ -335,6 +383,127 @@ export default function AdminTimetable() {
   };
 
   // ---------------------------
+  // Update Seance Handlers
+  // ---------------------------
+  const openUpdateSeanceDialog = (seance) => {
+    setEditingSeance(seance);
+    
+    // Extract IDs if they're objects
+    const coursId = typeof seance.cours === 'object' 
+      ? (seance.cours?._id || seance.cours?.id)
+      : seance.cours;
+    
+    const classeId = typeof seance.classe === 'object' 
+      ? (seance.classe?._id || seance.classe?.id)
+      : seance.classe;
+    
+    const emploiId = typeof seance.emploiDuTemps === 'object'
+      ? (seance.emploiDuTemps?._id || seance.emploiDuTemps?.id)
+      : seance.emploiDuTemps;
+    
+    // Find the emploi for this seance
+    const emploi = emplois.find(e => (e._id || e.id) === emploiId);
+    setSelectedEmploi(emploi);
+    
+    setSeanceFormData({
+      jourSemaine: seance.jourSemaine || "",
+      heureDebut: seance.heureDebut || "",
+      heureFin: seance.heureFin || "",
+      salle: seance.salle || "",
+      typeCours: seance.typeCours || "",
+      cours: coursId || "",
+      classe: classeId || "",
+      emploiDuTemps: emploiId || "",
+      notes: seance.notes || "",
+    });
+    setShowUpdateSeanceDialog(true);
+  };
+
+  const handleUpdateSeance = async () => {
+    try {
+      setSubmitting(true);
+      const token = localStorage.getItem("token");
+      if (!token) return showToast("error", "Authentication required");
+
+      if (
+        !seanceFormData.jourSemaine ||
+        !seanceFormData.heureDebut ||
+        !seanceFormData.heureFin ||
+        !seanceFormData.salle ||
+        !seanceFormData.typeCours ||
+        !seanceFormData.cours
+      )
+        return showToast("error", "Please fill in all required fields");
+
+      const emploi = emplois.find(
+        (e) => (e._id || e.id) === seanceFormData.emploiDuTemps
+      );
+      if (!emploi) return showToast("error", "Associated timetable not found");
+
+      const dayMap = {
+        Dimanche: 0,
+        Lundi: 1,
+        Mardi: 2,
+        Mercredi: 3,
+        Jeudi: 4,
+        Vendredi: 5,
+        Samedi: 6,
+      };
+
+      const startDate = new Date(emploi.dateDebut);
+      const dayOffset =
+        (dayMap[seanceFormData.jourSemaine] + 7 - startDate.getDay()) % 7;
+
+      const dateDebut = new Date(startDate);
+      dateDebut.setDate(startDate.getDate() + dayOffset);
+      dateDebut.setHours(parseInt(seanceFormData.heureDebut.split(":")[0]));
+      dateDebut.setMinutes(parseInt(seanceFormData.heureDebut.split(":")[1]));
+
+      const dateFin = new Date(startDate);
+      dateFin.setDate(startDate.getDate() + dayOffset);
+      dateFin.setHours(parseInt(seanceFormData.heureFin.split(":")[0]));
+      dateFin.setMinutes(parseInt(seanceFormData.heureFin.split(":")[1]));
+
+      const seanceData = { ...seanceFormData, dateDebut, dateFin };
+      const seanceId = editingSeance._id || editingSeance.id;
+      
+      const updatedSeance = await updateSeance(seanceId, seanceData, token);
+      
+      setSeances((prev) =>
+        prev.map((s) => ((s._id || s.id) === seanceId ? updatedSeance : s))
+      );
+      
+      showToast("success", "Session updated successfully!");
+      setShowUpdateSeanceDialog(false);
+      setEditingSeance(null);
+    } catch (err) {
+      console.error(err);
+      showToast(
+        "error",
+        err.response?.data?.message || "Failed to update session"
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Get courses for selected emploi's class
+  const getCoursesForSelectedClass = () => {
+    if (!selectedEmploi) return [];
+    
+    const classeId = typeof selectedEmploi.classe === 'object' 
+      ? (selectedEmploi.classe?._id || selectedEmploi.classe?.id)
+      : selectedEmploi.classe;
+    
+    return courses.filter((cours) => {
+      const coursClasseId = typeof cours.classe === 'object'
+        ? (cours.classe?._id || cours.classe?.id)
+        : cours.classe;
+      return coursClasseId === classeId;
+    });
+  };
+
+  // ---------------------------
   // Delete handlers
   // ---------------------------
   const handleDeleteEmploi = async (id) => {
@@ -376,7 +545,6 @@ export default function AdminTimetable() {
       ?.toLowerCase()
       .includes(searchTerm.toLowerCase());
     
-    // Extract the class ID from emploi.classe (could be object or string)
     const emploiClasseId = typeof emploi.classe === 'object' 
       ? (emploi.classe?._id || emploi.classe?.id)
       : emploi.classe;
@@ -551,9 +719,7 @@ export default function AdminTimetable() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() =>
-                              showToast("info", "Edit coming soon")
-                            }
+                            onClick={() => openUpdateEmploiDialog(emploi)}
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
@@ -640,9 +806,7 @@ export default function AdminTimetable() {
                                     <Button
                                       variant="ghost"
                                       size="icon"
-                                      onClick={() =>
-                                        showToast("info", "Edit coming soon")
-                                      }
+                                      onClick={() => openUpdateSeanceDialog(seance)}
                                     >
                                       <Edit className="h-4 w-4" />
                                     </Button>
@@ -755,6 +919,102 @@ export default function AdminTimetable() {
                   <Plus className="h-4 w-4 mr-2" />
                 )}
                 Create
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* ============================= */}
+        {/* Update Timetable Dialog */}
+        {/* ============================= */}
+        <Dialog
+          open={showUpdateEmploiDialog}
+          onOpenChange={setShowUpdateEmploiDialog}
+        >
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>Update Timetable</DialogTitle>
+              <DialogDescription>
+                Modify the timetable details
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label>Title</Label>
+                <Input
+                  name="titre"
+                  value={emploiFormData.titre}
+                  onChange={handleEmploiChange}
+                  placeholder="Timetable title"
+                />
+              </div>
+              <div>
+                <Label>Description</Label>
+                <Textarea
+                  name="description"
+                  value={emploiFormData.description}
+                  onChange={handleEmploiChange}
+                  placeholder="Optional description"
+                />
+              </div>
+              <div>
+                <Label>Class</Label>
+                <Select
+                  value={emploiFormData.classe}
+                  onValueChange={(value) =>
+                    handleSelectChange("classe", value, "emploi")
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select class" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {classes.map((classe) => (
+                      <SelectItem key={classe._id} value={classe._id}>
+                        {classe.nom}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Start Date</Label>
+                  <Input
+                    type="date"
+                    name="dateDebut"
+                    value={emploiFormData.dateDebut}
+                    onChange={handleEmploiChange}
+                  />
+                </div>
+                <div>
+                  <Label>End Date</Label>
+                  <Input
+                    type="date"
+                    name="dateFin"
+                    value={emploiFormData.dateFin}
+                    onChange={handleEmploiChange}
+                  />
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button 
+                variant="outline"
+                onClick={() => {
+                  setShowUpdateEmploiDialog(false);
+                  setEditingEmploi(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleUpdateEmploi} disabled={submitting}>
+                {submitting ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <Edit className="h-4 w-4 mr-2" />
+                )}
+                Update
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -902,6 +1162,156 @@ export default function AdminTimetable() {
         </Dialog>
 
         {/* ============================= */}
+        {/* Update Session Dialog */}
+        {/* ============================= */}
+        <Dialog
+          open={showUpdateSeanceDialog}
+          onOpenChange={setShowUpdateSeanceDialog}
+        >
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>Update Session</DialogTitle>
+              <DialogDescription>
+                Modify the session details
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label>Course</Label>
+                <Select
+                  value={seanceFormData.cours}
+                  onValueChange={(value) =>
+                    handleSelectChange("cours", value, "seance")
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select course" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {getCoursesForSelectedClass().length === 0 ? (
+                      <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                        No courses available for this class
+                      </div>
+                    ) : (
+                      getCoursesForSelectedClass().map((cours) => (
+                        <SelectItem key={cours._id} value={cours._id}>
+                          {cours.nom}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Type</Label>
+                <Select
+                  value={seanceFormData.typeCours}
+                  onValueChange={(value) =>
+                    handleSelectChange("typeCours", value, "seance")
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="CM">CM</SelectItem>
+                    <SelectItem value="TD">TD</SelectItem>
+                    <SelectItem value="TP">TP</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Day</Label>
+                  <Select
+                    value={seanceFormData.jourSemaine}
+                    onValueChange={(value) =>
+                      handleSelectChange("jourSemaine", value, "seance")
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select day" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[
+                        "Dimanche",
+                        "Lundi",
+                        "Mardi",
+                        "Mercredi",
+                        "Jeudi",
+                        "Vendredi",
+                        "Samedi",
+                      ].map((day) => (
+                        <SelectItem key={day} value={day}>
+                          {day}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Room</Label>
+                  <Input
+                    name="salle"
+                    value={seanceFormData.salle}
+                    onChange={handleSeanceChange}
+                    placeholder="Room number"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Start Time</Label>
+                  <Input
+                    type="time"
+                    name="heureDebut"
+                    value={seanceFormData.heureDebut}
+                    onChange={handleSeanceChange}
+                  />
+                </div>
+                <div>
+                  <Label>End Time</Label>
+                  <Input
+                    type="time"
+                    name="heureFin"
+                    value={seanceFormData.heureFin}
+                    onChange={handleSeanceChange}
+                  />
+                </div>
+              </div>
+              <div>
+                <Label>Notes</Label>
+                <Textarea
+                  name="notes"
+                  value={seanceFormData.notes}
+                  onChange={handleSeanceChange}
+                  placeholder="Optional notes"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button 
+                variant="outline"
+                onClick={() => {
+                  setShowUpdateSeanceDialog(false);
+                  setEditingSeance(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleUpdateSeance} disabled={submitting}>
+                {submitting ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <Edit className="h-4 w-4 mr-2" />
+                )}
+                Update Session
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* ============================= */}
         {/* Delete Confirmation */}
         {/* ============================= */}
         <Dialog
@@ -915,6 +1325,7 @@ export default function AdminTimetable() {
               <DialogTitle>Confirm Deletion</DialogTitle>
               <DialogDescription>
                 Are you sure you want to delete this {deleteConfirm.type}?
+                {deleteConfirm.type === "emploi" && " This will also delete all associated sessions."}
               </DialogDescription>
             </DialogHeader>
             <DialogFooter className="flex justify-between">

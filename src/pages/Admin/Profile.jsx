@@ -21,7 +21,7 @@ import {
   Alert,
   AlertDescription,
 } from "@/components/ui/alert";
-import { getUserAuth } from "@/services/userService";
+import { updatePassword } from "@/services/userService"; // ADD THIS IMPORT
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
@@ -36,6 +36,7 @@ export default function AdminProfile() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [toast, setToast] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [passwordLoading, setPasswordLoading] = useState(false); // ADD THIS
   
   const [passwordData, setPasswordData] = useState({
     current: "",
@@ -59,8 +60,17 @@ export default function AdminProfile() {
   const fetchAdminData = async () => {
     try {
       setLoading(true);
-      const response = await getUserAuth();
-      const userData = response.data || response;
+      const response = await fetch(`${API_BASE_URL}/users/me`, {
+        method: "GET",
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch user data");
+      }
+
+      const result = await response.json();
+      const userData = result.data || result;
       
       setFormData(userData);
       setOriginalData(userData);
@@ -96,45 +106,142 @@ export default function AdminProfile() {
     }
   };
 
-  // UI-only handlers (no API calls)
-  const handleSave = () => {
-    showToast("success", "Profile updated successfully!");
-    setIsEditing(false);
+  const createFormData = (data) => {
+    const formDataObj = new FormData();
+    Object.keys(data).forEach((key) => {
+      if (Array.isArray(data[key])) {
+        data[key].forEach((item) => formDataObj.append(key, item));
+      } else if (data[key] !== null && data[key] !== undefined) {
+        formDataObj.append(key, data[key]);
+      }
+    });
+    return formDataObj;
   };
 
-  const handlePasswordChange = () => {
+  const handleSave = async () => {
+    try {
+      setLoading(true);
+      
+      // Check if image changed and is a File object
+      const updatedData = { ...formData };
+      if (formData.image_User && !(formData.image_User instanceof File)) {
+        delete updatedData.image_User; // Don't send existing image path
+      }
+
+      const response = await fetch(`${API_BASE_URL}/users/update/${formData._id}`, {
+        method: "PUT",
+        body: createFormData(updatedData),
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ message: "Error" }));
+        throw new Error(error.message || "Failed to update profile");
+      }
+
+      const result = await response.json();
+      showToast("success", "Profile updated successfully!");
+      setIsEditing(false);
+      
+      // Refresh data
+      await fetchAdminData();
+    } catch (error) {
+      console.error("Update error:", error);
+      showToast("error", error.message || "Failed to update profile");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ============================================
+  // CORRECTED PASSWORD CHANGE FUNCTION
+  // ============================================
+  const handlePasswordChange = async () => {
     setPasswordError(null);
     
+    // Validation
     if (!passwordData.current || !passwordData.new || !passwordData.confirm) {
       setPasswordError({ type: "error", message: "Please fill in all password fields!" });
       return;
     }
+    
     if (passwordData.new !== passwordData.confirm) {
       setPasswordError({ type: "error", message: "New passwords don't match!" });
       return;
     }
+    
     if (passwordData.new.length < 8) {
       setPasswordError({ type: "error", message: "Password must be at least 8 characters long!" });
       return;
     }
-    
-    setPasswordError({ type: "success", message: "Password changed successfully!" });
-    setTimeout(() => {
-      showToast("success", "Password changed successfully!");
-      setShowPasswordDialog(false);
-      setPasswordData({ current: "", new: "", confirm: "" });
-      setPasswordError(null);
-    }, 1500);
+
+    try {
+      setPasswordLoading(true);
+      
+      // Use the service function instead of direct fetch
+      const response = await updatePassword(formData._id, {
+        oldPassword: passwordData.current,
+        newPassword: passwordData.new,
+      });
+
+      // Success
+      setPasswordError({ type: "success", message: "Password changed successfully!" });
+      
+      setTimeout(() => {
+        showToast("success", "Password changed successfully!");
+        setShowPasswordDialog(false);
+        setPasswordData({ current: "", new: "", confirm: "" });
+        setPasswordError(null);
+      }, 1500);
+      
+    } catch (error) {
+      console.error("Password change error:", error);
+      
+      // Handle axios error response
+      const errorMessage = error.response?.data?.message 
+        || error.message 
+        || "Failed to change password";
+      
+      setPasswordError({ type: "error", message: errorMessage });
+    } finally {
+      setPasswordLoading(false);
+    }
   };
 
   const handleEmailPreferences = () => {
+    // This could be extended to actually save preferences to the backend
     showToast("success", "Email preferences updated successfully!");
     setShowEmailDialog(false);
   };
 
-  const handleDeleteAccount = () => {
-    showToast("warning", "Account deletion request submitted. Our team will contact you shortly.");
-    setShowDeleteDialog(false);
+  const handleDeleteAccount = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/users/delete/${formData._id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ message: "Error" }));
+        throw new Error(error.message || "Failed to delete account");
+      }
+
+      showToast("success", "Account deleted successfully. Redirecting...");
+      setShowDeleteDialog(false);
+      
+      // Logout and redirect after 2 seconds
+      setTimeout(async () => {
+        await fetch(`${API_BASE_URL}/users/logout`, {
+          method: "POST",
+          credentials: "include",
+        });
+        window.location.href = "/login";
+      }, 2000);
+    } catch (error) {
+      console.error("Delete account error:", error);
+      showToast("error", error.message || "Failed to delete account");
+      setShowDeleteDialog(false);
+    }
   };
 
   const handleCancel = () => {
@@ -543,11 +650,13 @@ export default function AdminProfile() {
                           value={passwordData.current}
                           onChange={(e) => setPasswordData({...passwordData, current: e.target.value})}
                           placeholder="Enter current password"
+                          disabled={passwordLoading}
                         />
                         <button
                           type="button"
                           onClick={() => setShowPassword(!showPassword)}
                           className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                          disabled={passwordLoading}
                         >
                           {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </button>
@@ -561,6 +670,7 @@ export default function AdminProfile() {
                         value={passwordData.new}
                         onChange={(e) => setPasswordData({...passwordData, new: e.target.value})}
                         placeholder="Enter new password"
+                        disabled={passwordLoading}
                       />
                     </div>
                     <div className="space-y-2">
@@ -571,6 +681,7 @@ export default function AdminProfile() {
                         value={passwordData.confirm}
                         onChange={(e) => setPasswordData({...passwordData, confirm: e.target.value})}
                         placeholder="Confirm new password"
+                        disabled={passwordLoading}
                       />
                     </div>
                     <Alert>
@@ -580,14 +691,29 @@ export default function AdminProfile() {
                     </Alert>
                   </div>
                   <DialogFooter>
-                    <Button variant="outline" onClick={() => {
-                      setShowPasswordDialog(false);
-                      setPasswordError(null);
-                    }}>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        setShowPasswordDialog(false);
+                        setPasswordError(null);
+                        setPasswordData({ current: "", new: "", confirm: "" });
+                      }}
+                      disabled={passwordLoading}
+                    >
                       Cancel
                     </Button>
-                    <Button onClick={handlePasswordChange}>
-                      Update Password
+                    <Button 
+                      onClick={handlePasswordChange}
+                      disabled={passwordLoading}
+                    >
+                      {passwordLoading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Updating...
+                        </>
+                      ) : (
+                        "Update Password"
+                      )}
                     </Button>
                   </DialogFooter>
                 </DialogContent>
