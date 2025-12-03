@@ -1,9 +1,15 @@
 import * as React from "react";
 import { format } from "date-fns";
-import { Calendar as CalendarIcon } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronDown } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -12,99 +18,153 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-function DatePicker({ date, setDate, placeholder = "Pick a date", className, disabled }) {
-  const [day, setDay] = React.useState(date ? date.getDate().toString() : "");
-  const [month, setMonth] = React.useState(date ? (date.getMonth() + 1).toString() : "");
-  const [year, setYear] = React.useState(date ? date.getFullYear().toString() : "");
+function DatePicker({
+  date,
+  setDate,
+  placeholder = "Pick a date",
+  className,
+  disabled,
+  fromDate,
+  toDate,
+  showTodayButton = true,
+  showClearButton = true,
+  ...props
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [month, setMonth] = React.useState(date ? date.getMonth() : new Date().getMonth());
+  const [year, setYear] = React.useState(date ? date.getFullYear() : new Date().getFullYear());
+
+  const handleSelect = (selectedDate) => {
+    setDate(selectedDate);
+    setOpen(false);
+  };
+
+  const handleToday = () => {
+    setDate(new Date());
+    setOpen(false);
+  };
+
+  const handleClear = () => {
+    setDate(null);
+    setOpen(false);
+  };
+
+  const handleYearChange = (newYear) => {
+    setYear(parseInt(newYear));
+  };
+
+  const handleMonthChange = (newMonth) => {
+    setMonth(parseInt(newMonth));
+  };
+
+  // Generate year options (1900 to current year + 10)
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: currentYear - 1900 + 11 }, (_, i) => 1900 + i);
 
   const months = [
-    { value: "1", label: "January" },
-    { value: "2", label: "February" },
-    { value: "3", label: "March" },
-    { value: "4", label: "April" },
-    { value: "5", label: "May" },
-    { value: "6", label: "June" },
-    { value: "7", label: "July" },
-    { value: "8", label: "August" },
-    { value: "9", label: "September" },
-    { value: "10", label: "October" },
-    { value: "11", label: "November" },
-    { value: "12", label: "December" },
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
   ];
 
-  const currentYear = new Date().getFullYear();
-  const years = Array.from({ length: currentYear - 1900 + 1 }, (_, i) => (currentYear - i).toString());
+    return (
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            className={cn(
+              "w-full justify-start text-left font-normal",
+              !date && "text-muted-foreground",
+              className
+            )}
+            disabled={disabled}
+            aria-label={date ? `Selected date: ${format(date, "PPP")}` : placeholder}
+            {...props}
+          >
+            <CalendarIcon className="mr-2 h-4 w-4" />
+            {date ? format(date, "PPP") : <span>{placeholder}</span>}
+          </Button>
+        </PopoverTrigger>
 
-  const daysInMonth = React.useMemo(() => {
-    if (!month || !year) return 31;
-    const date = new Date(parseInt(year), parseInt(month), 0);
-    return date.getDate();
-  }, [month, year]);
+        <PopoverContent className="w-auto p-0" align="start">
+          <div className="p-3">
+            {/* Year and Month selectors */}
+            <div className="flex gap-2 mb-3">
+              <Select value={month.toString()} onValueChange={handleMonthChange}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {months.map((monthName, index) => (
+                    <SelectItem key={index} value={index.toString()}>
+                      {monthName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
-  const days = Array.from({ length: daysInMonth }, (_, i) => (i + 1).toString());
+              <Select value={year.toString()} onValueChange={handleYearChange}>
+                <SelectTrigger className="w-[100px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="max-h-60">
+                  {years.map((y) => (
+                    <SelectItem key={y} value={y.toString()}>
+                      {y}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-  React.useEffect(() => {
-    if (day && month && year) {
-      const selectedDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-      setDate(selectedDate);
-    } else {
-      setDate(null);
-    }
-  }, [day, month, year, setDate]);
+            <Calendar
+              mode="single"
+              selected={date}
+              onSelect={handleSelect}
+              month={new Date(year, month)}
+              onMonthChange={(newMonth) => {
+                setMonth(newMonth.getMonth());
+                setYear(newMonth.getFullYear());
+              }}
+              initialFocus
+              fromDate={fromDate}
+              toDate={toDate}
+              disabled={(date) => {
+                if (fromDate && date < fromDate) return true;
+                if (toDate && date > toDate) return true;
+                return false;
+              }}
+              {...props}
+            />
 
-  React.useEffect(() => {
-    if (date) {
-      setDay(date.getDate().toString());
-      setMonth((date.getMonth() + 1).toString());
-      setYear(date.getFullYear().toString());
-    } else {
-      setDay("");
-      setMonth("");
-      setYear("");
-    }
-  }, [date]);
-
-  return (
-    <div className={cn("flex gap-2", className)}>
-      <Select value={month} onValueChange={setMonth} disabled={disabled}>
-        <SelectTrigger className="w-[120px]">
-          <SelectValue placeholder="Month" />
-        </SelectTrigger>
-        <SelectContent>
-          {months.map((m) => (
-            <SelectItem key={m.value} value={m.value}>
-              {m.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      <Select value={day} onValueChange={setDay} disabled={disabled}>
-        <SelectTrigger className="w-[80px]">
-          <SelectValue placeholder="Day" />
-        </SelectTrigger>
-        <SelectContent>
-          {days.map((d) => (
-            <SelectItem key={d} value={d}>
-              {d}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      <Select value={year} onValueChange={setYear} disabled={disabled}>
-        <SelectTrigger className="w-[100px]">
-          <SelectValue placeholder="Year" />
-        </SelectTrigger>
-        <SelectContent>
-          {years.map((y) => (
-            <SelectItem key={y} value={y}>
-              {y}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
+            {(showTodayButton || showClearButton) && (
+              <div className="flex justify-between gap-2 mt-3 pt-3 border-t">
+                {showTodayButton && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleToday}
+                    className="flex-1"
+                    aria-label="Select today's date"
+                  >
+                    Today
+                  </Button>
+                )}
+                {showClearButton && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleClear}
+                  className="flex-1"
+                  aria-label="Clear selected date"
+                >
+                  Clear
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 

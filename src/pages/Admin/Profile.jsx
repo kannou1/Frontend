@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { DatePicker } from "@/components/ui/date-picker";
 import { User, Mail, Loader2, Camera, Save, X, Lock, Bell, Trash2, Settings, Key, Users, BookOpen, CheckCircle2, XCircle, AlertCircle, Eye, EyeOff } from "lucide-react";
 import {
   Dialog,
@@ -28,6 +29,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000
 export default function AdminProfile() {
   const [formData, setFormData] = useState(null);
   const [originalData, setOriginalData] = useState(null);
+  const [dateOfBirth, setDateOfBirth] = useState(null);
   const [previewImage, setPreviewImage] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -57,6 +59,16 @@ export default function AdminProfile() {
     fetchAdminData();
   }, []);
 
+  // Sync dateOfBirth with formData.datedeNaissance
+  useEffect(() => {
+    if (formData) {
+      setFormData(prev => ({
+        ...prev,
+        datedeNaissance: dateOfBirth ? dateOfBirth.toISOString() : prev.datedeNaissance
+      }));
+    }
+  }, [dateOfBirth]);
+
   const fetchAdminData = async () => {
     try {
       setLoading(true);
@@ -74,7 +86,12 @@ export default function AdminProfile() {
       
       setFormData(userData);
       setOriginalData(userData);
-      
+
+      // Set date of birth if exists
+      if (userData.datedeNaissance) {
+        setDateOfBirth(new Date(userData.datedeNaissance));
+      }
+
       // Set preview image if exists
       if (userData.image_User) {
         setPreviewImage(`${API_BASE_URL}/images/${userData.image_User}`);
@@ -429,12 +446,10 @@ export default function AdminProfile() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="datedeNaissance">Date of Birth</Label>
-                  <Input
-                    id="datedeNaissance"
-                    name="datedeNaissance"
-                    type="date"
-                    value={formData.datedeNaissance?.split('T')[0] || ''}
-                    onChange={handleChange}
+                  <DatePicker
+                    date={dateOfBirth}
+                    setDate={setDateOfBirth}
+                    placeholder="Select date of birth"
                     disabled={!isEditing}
                   />
                 </div>

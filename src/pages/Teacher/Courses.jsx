@@ -1,147 +1,213 @@
-import { useState } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { getAllCours } from '../../services/coursService';
+import { AuthContext } from '../../contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { BookOpen, Users, Clock, Star, Plus } from 'lucide-react';
+import { BookOpen, Users, Clock, Star, Loader2, AlertCircle, FileText } from 'lucide-react';
+
+// Toast Component
+const Toast = ({ message, onClose, type = "error" }) => (
+  <div className={`fixed top-5 right-5 ${
+    type === "success" ? "bg-green-500" : "bg-destructive"
+  } text-white px-4 py-2 rounded shadow-lg z-50`}>
+    <div className="flex items-center justify-between gap-2">
+      <span>{message}</span>
+      <button onClick={onClose} className="font-bold">×</button>
+    </div>
+  </div>
+);
 
 export default function TeacherCourses() {
-  const [selectedTab, setSelectedTab] = useState('current');
+  const { user } = useContext(AuthContext);
+  const navigate = useNavigate();
+  
+  const [courses, setCourses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState(null);
+  const [toastType, setToastType] = useState("error");
 
-  const currentCourses = [
-    {
-      id: 1,
-      code: 'MATH101',
-      name: 'Mathematics 101',
-      students: 45,
-      schedule: 'Mon, Wed 9:00 AM',
-      room: 'Room 301',
-      progress: 75,
-      rating: 4.5
-    },
-    {
-      id: 2,
-      code: 'ALG201',
-      name: 'Algebra II',
-      students: 38,
-      schedule: 'Tue, Thu 11:00 AM',
-      room: 'Room 205',
-      progress: 60,
-      rating: 4.2
-    }
-  ];
+  const showToastMessage = (message, type = "error") => {
+    setToast(message);
+    setToastType(type);
+    setTimeout(() => setToast(null), 5000);
+  };
 
-  const pastCourses = [
-    {
-      id: 3,
-      code: 'CALC101',
-      name: 'Calculus I',
-      students: 42,
-      semester: 'Fall 2023',
-      rating: 4.7
-    }
-  ];
+  // Fetch courses
+  useEffect(() => {
+    const fetchCourses = async () => {
+      try {
+        setLoading(true);
+        const data = await getAllCours();
+        
+        console.log("📚 Fetched courses:", data);
+        
+        setCourses(data || []);
+      } catch (error) {
+        console.error("❌ Error fetching courses:", error);
+        showToastMessage(error.message || "Failed to load courses");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCourses();
+  }, []);
+
+  // Calculate course statistics
+  const getCourseStats = (course) => {
+    const studentsCount = course.classe?.etudiants?.length || 0;
+    const examsCount = course.examens?.length || 0;
+    const assignmentsCount = course.examens?.filter(e => 
+      (e.type || "").toLowerCase() === "assignment"
+    ).length || 0;
+    
+    // Calculate progress based on materials and exams completion
+    const totalItems = (course.examens?.length || 0) + (course.materials?.length || 0);
+    const progress = totalItems > 0 ? Math.min(Math.round((course.materials?.length || 0) / totalItems * 100), 100) : 0;
+    
+    return { studentsCount, examsCount, assignmentsCount, progress };
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 p-6">
+      {toast && (
+        <Toast message={toast} onClose={() => setToast(null)} type={toastType} />
+      )}
+
       <div className="container mx-auto space-y-6">
+        {/* Header */}
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
               My Courses
             </h1>
-            <p className="text-muted-foreground mt-1">Manage your teaching courses and assignments</p>
+            <p className="text-muted-foreground mt-1">
+              Manage your teaching courses and assignments
+            </p>
           </div>
-          <Button className="gap-2">
-            <Plus className="h-4 w-4" />
-            Create Course
-          </Button>
         </div>
 
-        <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
-          <TabsList>
-            <TabsTrigger value="current">Current Courses ({currentCourses.length})</TabsTrigger>
-            <TabsTrigger value="past">Past Courses ({pastCourses.length})</TabsTrigger>
-          </TabsList>
+        {/* Courses List */}
+        <div className="space-y-4">
+          {courses.length > 0 ? (
+            courses.map((course) => {
+              const stats = getCourseStats(course);
+              const schedule = course.emplois?.[0] 
+                ? `${course.emplois[0].jour} ${course.emplois[0].heureDebut}`
+                : "Schedule TBA";
+              const room = course.emplois?.[0]?.salle || "Room TBA";
 
-          <TabsContent value="current" className="space-y-4">
-            {currentCourses.map((course) => (
-              <Card key={course.id} className="hover:shadow-lg transition-shadow">
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-1">
-                      <CardTitle className="text-xl">{course.name}</CardTitle>
-                      <CardDescription>{course.code} • {course.room}</CardDescription>
+              return (
+                <Card key={course._id} className="hover:shadow-lg transition-shadow">
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
+                      <div className="space-y-1">
+                        <CardTitle className="text-xl">
+                          {course.nom || "Untitled Course"}
+                        </CardTitle>
+                        <CardDescription>
+                          {course.code || "N/A"} • {room}
+                        </CardDescription>
+                      </div>
+                      <Badge variant="secondary">Active</Badge>
                     </div>
-                    <Badge variant="secondary">Active</Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                    <div className="flex items-center gap-2">
-                      <Users className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">{course.students} students</span>
+                  </CardHeader>
+                  
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                      <div className="flex items-center gap-2">
+                        <Users className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm">
+                          {stats.studentsCount} students
+                        </span>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm">{schedule}</span>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <BookOpen className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm">{stats.progress}% complete</span>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <Star className="h-4 w-4 text-yellow-500" />
+                        <span className="text-sm">
+                          {stats.examsCount} exam{stats.examsCount !== 1 ? 's' : ''}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">{course.schedule}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <BookOpen className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">{course.progress}% complete</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Star className="h-4 w-4 text-yellow-500" />
-                      <span className="text-sm">{course.rating}/5.0</span>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm">View Details</Button>
-                    <Button variant="outline" size="sm">Manage Students</Button>
-                    <Button variant="outline" size="sm">Assignments</Button>
-                    <Button size="sm">Take Attendance</Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </TabsContent>
 
-          <TabsContent value="past" className="space-y-4">
-            {pastCourses.map((course) => (
-              <Card key={course.id}>
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-1">
-                      <CardTitle className="text-xl">{course.name}</CardTitle>
-                      <CardDescription>{course.code} • {course.semester}</CardDescription>
+                    <div className="flex flex-wrap gap-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => navigate(`/teacher/courses/${course._id}`)}
+                      >
+                        View Details
+                      </Button>
+                      
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => {
+                          navigate(`/teacher/courses/${course._id}`, { 
+                            state: { activeTab: 'assignments' } 
+                          });
+                        }}
+                      >
+                        <FileText className="h-4 w-4 mr-1" />
+                        Assignments
+                      </Button>
+                      
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => {
+                          navigate(`/teacher/courses/${course._id}`, { 
+                            state: { activeTab: 'exams' } 
+                          });
+                        }}
+                      >
+                        <AlertCircle className="h-4 w-4 mr-1" />
+                        Exams
+                      </Button>
+                      
+                      <Button 
+                        size="sm"
+                        onClick={() => {
+                          navigate(`/teacher/courses/${course._id}/attendance`);
+                        }}
+                      >
+                        Take Attendance
+                      </Button>
                     </div>
-                    <Badge variant="outline">Completed</Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                    <div className="flex items-center gap-2">
-                      <Users className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">{course.students} students</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Star className="h-4 w-4 text-yellow-500" />
-                      <span className="text-sm">{course.rating}/5.0 rating</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <BookOpen className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">100% complete</span>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm">View Report</Button>
-                    <Button variant="outline" size="sm">Student Feedback</Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </TabsContent>
-        </Tabs>
+                  </CardContent>
+                </Card>
+              );
+            })
+          ) : (
+            <Card className="p-12 text-center">
+              <BookOpen className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold mb-2">No Courses Found</h3>
+              <p className="text-muted-foreground">
+                You don't have any courses assigned at the moment.
+              </p>
+            </Card>
+          )}
+        </div>
       </div>
     </div>
   );

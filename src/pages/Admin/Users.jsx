@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Search, Trash2, Mail, Loader2, AlertCircle, UserPlus, Eye, EyeOff, Calendar, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getAllUsers, deleteUserById, createUser } from '@/services/userService';
@@ -695,12 +696,10 @@ const handleCreateUser = async () => {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="datedeNaissance" className="text-xs sm:text-sm">Date of Birth</Label>
-                      <Input
-                        id="datedeNaissance"
-                        type="date"
-                        value={newUser.datedeNaissance}
-                        onChange={(e) => setNewUser({...newUser, datedeNaissance: e.target.value})}
-                        className="text-sm h-9"
+                      <DatePicker
+                        date={newUser.datedeNaissance ? new Date(newUser.datedeNaissance) : null}
+                        setDate={(date) => setNewUser({...newUser, datedeNaissance: date ? date.toISOString().split('T')[0] : ''})}
+                        placeholder="Select date of birth"
                       />
                     </div>
                   </div>
@@ -716,12 +715,10 @@ const handleCreateUser = async () => {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="dateInscription" className="text-xs sm:text-sm">Enrollment Date</Label>
-                    <Input
-                      id="dateInscription"
-                      type="date"
-                      value={newUser.dateInscription}
-                      onChange={(e) => setNewUser({...newUser, dateInscription: e.target.value})}
-                      className="text-sm h-9"
+                    <DatePicker
+                      date={newUser.dateInscription ? new Date(newUser.dateInscription) : null}
+                      setDate={(date) => setNewUser({...newUser, dateInscription: date ? date.toISOString().split('T')[0] : ''})}
+                      placeholder="Select enrollment date"
                     />
                   </div>
                 </div>
@@ -754,12 +751,10 @@ const handleCreateUser = async () => {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="dateEmbauche" className="text-xs sm:text-sm">Hire Date</Label>
-                      <Input
-                        id="dateEmbauche"
-                        type="date"
-                        value={newUser.dateEmbauche}
-                        onChange={(e) => setNewUser({...newUser, dateEmbauche: e.target.value})}
-                        className="text-sm h-9"
+                      <DatePicker
+                        date={newUser.dateEmbauche ? new Date(newUser.dateEmbauche) : null}
+                        setDate={(date) => setNewUser({...newUser, dateEmbauche: date ? date.toISOString().split('T')[0] : ''})}
+                        placeholder="Select hire date"
                       />
                     </div>
                   </div>

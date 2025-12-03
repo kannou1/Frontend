@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { DatePicker } from '@/components/ui/date-picker'; // ✅ Import DatePicker
 import { 
   Plus, 
   Edit, 
@@ -48,13 +49,13 @@ export default function AdminAnnouncements() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showStatsDialog, setShowStatsDialog] = useState(false);
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false); // ✅ Dialog de suppression
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
   const [stats, setStats] = useState(null);
   const [toast, setToast] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [dialogError, setDialogError] = useState(null);
-  const [deleting, setDeleting] = useState(false); // ✅ État de suppression
+  const [deleting, setDeleting] = useState(false);
 
   const [formData, setFormData] = useState({
     titre: "",
@@ -65,7 +66,7 @@ export default function AdminAnnouncements() {
     utilisateursSpecifiques: [],
     classesSpecifiques: [],
     rolesMultiples: [],
-    dateExpiration: "",
+    dateExpiration: null, // ✅ Changed to null for DatePicker
     estEpingle: false,
   });
 
@@ -108,7 +109,6 @@ export default function AdminAnnouncements() {
     return styles[priorite] || styles.normal;
   };
 
-  // ✅ Fonction pour obtenir le nom d'affichage de la cible
   const getTargetDisplay = (announcement) => {
     if (announcement.destinataires === "specific_classes" && announcement.classesSpecifiques?.length > 0) {
       return announcement.classesSpecifiques.map(c => c.nom).join(", ");
@@ -151,6 +151,11 @@ export default function AdminAnnouncements() {
     setFormData({ ...formData, [name]: value });
   };
 
+  // ✅ Handler for DatePicker
+  const handleDateExpirationChange = (date) => {
+    setFormData({ ...formData, dateExpiration: date });
+  };
+
   const openCreateDialog = () => {
     setFormData({
       titre: "",
@@ -161,7 +166,7 @@ export default function AdminAnnouncements() {
       utilisateursSpecifiques: [],
       classesSpecifiques: [],
       rolesMultiples: [],
-      dateExpiration: "",
+      dateExpiration: null, // ✅ Reset to null
       estEpingle: false,
     });
     setDialogError(null);
@@ -179,14 +184,13 @@ export default function AdminAnnouncements() {
       utilisateursSpecifiques: announcement.utilisateursSpecifiques?.map(u => u._id || u) || [],
       classesSpecifiques: announcement.classesSpecifiques?.map(c => c._id || c) || [],
       rolesMultiples: announcement.rolesMultiples || [],
-      dateExpiration: announcement.dateExpiration ? new Date(announcement.dateExpiration).toISOString().split('T')[0] : "",
+      dateExpiration: announcement.dateExpiration ? new Date(announcement.dateExpiration) : null, // ✅ Convert to Date object
       estEpingle: announcement.estEpingle,
     });
     setDialogError(null);
     setShowEditDialog(true);
   };
 
-  // ✅ Ouvrir le dialog de suppression
   const openDeleteDialog = (announcement) => {
     setSelectedAnnouncement(announcement);
     setShowDeleteDialog(true);
@@ -243,7 +247,6 @@ export default function AdminAnnouncements() {
     }
   };
 
-  // ✅ Fonction de suppression avec dialog
   const handleDelete = async () => {
     try {
       setDeleting(true);
@@ -344,12 +347,14 @@ export default function AdminAnnouncements() {
                           </div>
                           <p className="text-sm text-muted-foreground mb-2">{announcement.contenu}</p>
                           <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                            {/* ✅ Affichage amélioré de la cible */}
                             <span className="font-medium">
                               Target: <span className="text-primary">{getTargetDisplay(announcement)}</span>
                             </span>
                             <span>Views: {announcement.nombreVues || 0}</span>
                             <span>{new Date(announcement.createdAt).toLocaleDateString()}</span>
+                            {announcement.dateExpiration && (
+                              <span>Expires: {new Date(announcement.dateExpiration).toLocaleDateString()}</span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -363,7 +368,6 @@ export default function AdminAnnouncements() {
                         <Button variant="ghost" size="sm" onClick={() => openEditDialog(announcement)}>
                           <Edit className="h-4 w-4" />
                         </Button>
-                        {/* ✅ Bouton de suppression avec dialog */}
                         <Button variant="ghost" size="sm" onClick={() => openDeleteDialog(announcement)}>
                           <Trash2 className="h-4 w-4 text-red-600" />
                         </Button>
@@ -471,9 +475,14 @@ export default function AdminAnnouncements() {
                 </div>
               )}
 
+              {/* ✅ Replace Input with DatePicker */}
               <div className="space-y-2">
                 <Label htmlFor="dateExpiration">Expiration Date (Optional)</Label>
-                <Input id="dateExpiration" name="dateExpiration" type="date" value={formData.dateExpiration} onChange={handleChange} />
+                <DatePicker
+                  date={formData.dateExpiration}
+                  setDate={handleDateExpirationChange}
+                  placeholder="Select expiration date"
+                />
               </div>
             </div>
 
@@ -581,9 +590,14 @@ export default function AdminAnnouncements() {
                 </div>
               )}
 
+              {/* ✅ Replace Input with DatePicker */}
               <div className="space-y-2">
                 <Label htmlFor="edit-dateExpiration">Expiration Date (Optional)</Label>
-                <Input id="edit-dateExpiration" name="dateExpiration" type="date" value={formData.dateExpiration} onChange={handleChange} />
+                <DatePicker
+                  date={formData.dateExpiration}
+                  setDate={handleDateExpirationChange}
+                  placeholder="Select expiration date"
+                />
               </div>
             </div>
 
@@ -596,7 +610,7 @@ export default function AdminAnnouncements() {
           </DialogContent>
         </Dialog>
 
-        {/* ✅ Delete Confirmation Dialog */}
+        {/* Delete Confirmation Dialog */}
         <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
           <DialogContent>
             <DialogHeader>

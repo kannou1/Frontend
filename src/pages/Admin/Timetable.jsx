@@ -10,6 +10,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { DatePicker } from "@/components/ui/date-picker";
 import {
   Select,
   SelectContent,
@@ -87,8 +88,8 @@ export default function AdminTimetable() {
     titre: "",
     description: "",
     classe: "",
-    dateDebut: "",
-    dateFin: "",
+    dateDebut: null,
+    dateFin: null,
   });
 
   const [seanceFormData, setSeanceFormData] = useState({
@@ -163,6 +164,14 @@ export default function AdminTimetable() {
     }
   };
 
+  const handleDateDebutChange = (date) => {
+    setEmploiFormData((prev) => ({ ...prev, dateDebut: date }));
+  };
+
+  const handleDateFinChange = (date) => {
+    setEmploiFormData((prev) => ({ ...prev, dateFin: date }));
+  };
+
   const getClassName = (classeRef) => {
     if (!classeRef) return "Not assigned";
     let id = classeRef;
@@ -205,8 +214,8 @@ export default function AdminTimetable() {
       titre: "",
       description: "",
       classe: "",
-      dateDebut: "",
-      dateFin: "",
+      dateDebut: null,
+      dateFin: null,
     });
     setShowCreateEmploiDialog(true);
   };
@@ -248,18 +257,18 @@ export default function AdminTimetable() {
   // ---------------------------
   const openUpdateEmploiDialog = (emploi) => {
     setEditingEmploi(emploi);
-    
+
     // Extract classe ID if it's an object
-    const classeId = typeof emploi.classe === 'object' 
+    const classeId = typeof emploi.classe === 'object'
       ? (emploi.classe?._id || emploi.classe?.id)
       : emploi.classe;
-    
+
     setEmploiFormData({
       titre: emploi.titre || "",
       description: emploi.description || "",
       classe: classeId || "",
-      dateDebut: emploi.dateDebut ? emploi.dateDebut.split('T')[0] : "",
-      dateFin: emploi.dateFin ? emploi.dateFin.split('T')[0] : "",
+      dateDebut: emploi.dateDebut ? new Date(emploi.dateDebut) : null,
+      dateFin: emploi.dateFin ? new Date(emploi.dateFin) : null,
     });
     setShowUpdateEmploiDialog(true);
   };
@@ -893,20 +902,18 @@ export default function AdminTimetable() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>Start Date</Label>
-                  <Input
-                    type="date"
-                    name="dateDebut"
-                    value={emploiFormData.dateDebut}
-                    onChange={handleEmploiChange}
+                  <DatePicker
+                    date={emploiFormData.dateDebut}
+                    setDate={handleDateDebutChange}
+                    placeholder="Pick start date"
                   />
                 </div>
                 <div>
                   <Label>End Date</Label>
-                  <Input
-                    type="date"
-                    name="dateFin"
-                    value={emploiFormData.dateFin}
-                    onChange={handleEmploiChange}
+                  <DatePicker
+                    date={emploiFormData.dateFin}
+                    setDate={handleDateFinChange}
+                    placeholder="Pick end date"
                   />
                 </div>
               </div>
@@ -980,20 +987,18 @@ export default function AdminTimetable() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>Start Date</Label>
-                  <Input
-                    type="date"
-                    name="dateDebut"
-                    value={emploiFormData.dateDebut}
-                    onChange={handleEmploiChange}
+                  <DatePicker
+                    date={emploiFormData.dateDebut}
+                    setDate={handleDateDebutChange}
+                    placeholder="Pick start date"
                   />
                 </div>
                 <div>
                   <Label>End Date</Label>
-                  <Input
-                    type="date"
-                    name="dateFin"
-                    value={emploiFormData.dateFin}
-                    onChange={handleEmploiChange}
+                  <DatePicker
+                    date={emploiFormData.dateFin}
+                    setDate={handleDateFinChange}
+                    placeholder="Pick end date"
                   />
                 </div>
               </div>

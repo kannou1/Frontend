@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getCoursById } from "../../services/coursService";
 import { getMaterialsByCourse } from "../../services/courseMaterialService";
+import { submitAssignment } from "../../services/examenService"; // ✅ Only import submitAssignment
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -15,16 +16,18 @@ import {
   FileText,
   AlertCircle,
   Loader2,
+  CheckCircle,
+  Download,
 } from "lucide-react";
 
 // Toast Component
-const Toast = ({ message, onClose }) => (
-  <div className="fixed top-5 right-5 bg-destructive text-white px-4 py-2 rounded shadow-lg animate-slide-in z-50">
+const Toast = ({ message, onClose, type = "error" }) => (
+  <div className={`fixed top-5 right-5 ${
+    type === "success" ? "bg-green-500" : "bg-destructive"
+  } text-white px-4 py-2 rounded shadow-lg animate-slide-in z-50`}>
     <div className="flex items-center justify-between gap-2">
       <span>{message}</span>
-      <button onClick={onClose} className="font-bold">
-        ×
-      </button>
+      <button onClick={onClose} className="font-bold">×</button>
     </div>
   </div>
 );
@@ -32,6 +35,7 @@ const Toast = ({ message, onClose }) => (
 const StudentCourseDetails = ({ token }) => {
   const { id } = useParams();
   const navigate = useNavigate();
+  
   const [course, setCourse] = useState(null);
   const [loadingCourse, setLoadingCourse] = useState(true);
   const [tabLoading, setTabLoading] = useState({
@@ -40,59 +44,183 @@ const StudentCourseDetails = ({ token }) => {
     exams: true,
   });
   const [activeTab, setActiveTab] = useState("chapters");
-  const [showToast, setShowToast] = useState(null);
+  const [toast, setToast] = useState(null);
+  const [toastType, setToastType] = useState("error");
+  const [submittingAssignment, setSubmittingAssignment] = useState(null);
+  const [selectedFileMap, setSelectedFileMap] = useState({});
 
-  useEffect(() => {
+  const fileInputRefs = useRef({});
+
+  const showToastMessage = (message, type = "error") => {
+    setToast(message);
+    setToastType(type);
+    setTimeout(() => setToast(null), 5000);
+  };
+
+  // ✅ Fetch course and materials - USE BACKEND DATA DIRECTLY
+  const fetchCourseAndMaterials = async () => {
     if (!id) {
-      setShowToast("Invalid course ID");
+      showToastMessage("Invalid course ID");
       setLoadingCourse(false);
       return;
     }
 
-    const fetchCourseAndMaterials = async () => {
-      try {
-        setLoadingCourse(true);
+    try {
+      setLoadingCourse(true);
 
-        const data = await getCoursById(id);
-        const materials = await getMaterialsByCourse(id, token);
+      const [data, materials] = await Promise.all([
+        getCoursById(id),
+        getMaterialsByCourse(id, token)
+      ]);
 
-        const instructorName =
-          data.enseignant?.prenom && data.enseignant?.nom
-            ? `${data.enseignant.prenom} ${data.enseignant.nom}`
-            : data.enseignant?.name || "TBA";
+      console.log("📦 Raw course data from backend:", data);
+      console.log("📦 Examens field:", data.examens);
 
-        const courseName = data.title || data.nom || "Untitled Course";
+      const instructorName =
+        data.enseignant?.prenom && data.enseignant?.nom
+          ? `${data.enseignant.prenom} ${data.enseignant.nom}`
+          : data.enseignant?.name || "TBA";
 
-        setCourse({
-          ...data,
-          title: courseName,
-          instructorName,
-          chapters: data.chapters || [],
-          materials,
-          assignments: data.assignments || [],
-          exams: data.exams || data.examens || [],
-          progress: data.progress || 0,
-        });
+      const courseName = data.title || data.nom || "Untitled Course";
 
-        setTimeout(
-          () =>
-            setTabLoading({
-              chapters: false,
-              assignments: false,
-              exams: false,
-            }),
-          500
-        );
-      } catch (err) {
-        console.error(err);
-        setShowToast(err.message || "Failed to load course");
-      } finally {
-        setLoadingCourse(false);
-      }
-    };
+      // ✅ Get exams directly from the course data (backend already populated them)
+      const allExams = data.examens || data.exams || [];
+      
+      console.log("📝 All exams from backend:", allExams);
+      console.log("📝 Number of exams:", allExams.length);
 
+      // ✅ Separate by type field
+      const assignments = allExams.filter(item => {
+        const itemType = (item.type || "").toLowerCase();
+        console.log(`Checking item: ${item.nom || item.title}, type: "${item.type}" -> normalized: "${itemType}"`);
+        return itemType === "assignment";
+      });
+      
+      const exams = allExams.filter(item => {
+        const itemType = (item.type || "").toLowerCase();
+        return itemType !== "assignment";
+      });
+
+      console.log("✅ Filtered assignments:", assignments.length, assignments.map(a => a.nom || a.title));
+      console.log("✅ Filtered exams:", exams.length, exams.map(e => e.nom || e.title));
+
+      setCourse({
+        ...data,
+        title: courseName,
+        instructorName,
+        chapters: data.chapters || [],
+        materials: materials || [],
+        assignments: assignments,
+        exams: exams,
+        progress: data.progress || 0,
+        className: data.classe?.nom || "General"
+      });
+
+      setTimeout(
+        () =>
+          setTabLoading({
+            chapters: false,
+            assignments: false,
+            exams: false,
+          }),
+        500
+      );
+    } catch (err) {
+      console.error("❌ Error fetching course:", err);
+      showToastMessage(err.message || "Failed to load course");
+    } finally {
+      setLoadingCourse(false);
+    }
+  };
+
+  useEffect(() => {
     fetchCourseAndMaterials();
   }, [id, token]);
+
+  // Handle file selection
+  const handleFileSelect = (e, assignmentId) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      showToastMessage("File size must be less than 10MB");
+      return;
+    }
+
+    const validExtensions = ['.pdf', '.doc', '.docx', '.txt', '.zip', '.rar'];
+    const fileName = file.name.toLowerCase();
+    const isValidType = validExtensions.some(ext => fileName.endsWith(ext));
+
+    if (!isValidType) {
+      showToastMessage("Please upload a valid file type (PDF, DOC, DOCX, TXT, ZIP, RAR)");
+      return;
+    }
+
+    setSelectedFileMap(prev => ({ ...prev, [assignmentId]: file }));
+  };
+
+  // Trigger file input
+  const triggerFileInput = (assignmentId) => {
+    const ref = fileInputRefs.current[assignmentId];
+    if (ref) ref.click();
+  };
+
+  // ✅ Submit assignment
+  const handleSubmitAssignment = async (assignmentId) => {
+    const file = selectedFileMap[assignmentId];
+    
+    if (!file) {
+      showToastMessage("Please select a file to submit");
+      return;
+    }
+
+    try {
+      setSubmittingAssignment(assignmentId);
+
+      const response = await submitAssignment(assignmentId, file);
+
+      showToastMessage("Assignment submitted successfully!", "success");
+
+      console.log("✅ Submission successful:", response.data);
+
+      // Clear selected file
+      setSelectedFileMap(prev => {
+        const copy = { ...prev };
+        delete copy[assignmentId];
+        return copy;
+      });
+
+      // Refresh course data
+      await fetchCourseAndMaterials();
+
+    } catch (error) {
+      console.error("❌ Error submitting assignment:", error);
+      const errorMessage = error.response?.data?.message || error.message || "Failed to submit assignment";
+      showToastMessage(errorMessage);
+    } finally {
+      setSubmittingAssignment(null);
+    }
+  };
+
+  // Get submission status
+  const getSubmissionStatus = (assignment) => {
+    if (assignment.submissions && Array.isArray(assignment.submissions)) {
+      const userSubmission = assignment.submissions.find(sub => {
+        const subUserId = typeof sub.etudiant === 'object' 
+          ? sub.etudiant?._id 
+          : sub.etudiant;
+        return subUserId === token;
+      });
+
+      if (userSubmission) {
+        return {
+          submitted: true,
+          data: userSubmission
+        };
+      }
+    }
+    return { submitted: false, data: null };
+  };
 
   if (loadingCourse) {
     return (
@@ -116,8 +244,8 @@ const StudentCourseDetails = ({ token }) => {
 
   return (
     <div className="min-h-screen bg-background relative">
-      {showToast && (
-        <Toast message={showToast} onClose={() => setShowToast(null)} />
+      {toast && (
+        <Toast message={toast} onClose={() => setToast(null)} type={toastType} />
       )}
 
       {/* Header */}
@@ -130,11 +258,17 @@ const StudentCourseDetails = ({ token }) => {
                   {course.title}
                 </h1>
                 <div className="flex items-center gap-4 text-muted-foreground flex-wrap mb-4">
-                  <User className="h-4 w-4" /> {course.instructorName}
+                  <div className="flex items-center gap-2">
+                    <User className="h-4 w-4" />
+                    <span>{course.instructorName}</span>
+                  </div>
                   <span>•</span>
-                  <Calendar className="h-4 w-4" /> {course.semestre || "TBA"}
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4" />
+                    <span>{course.semestre || "TBA"}</span>
+                  </div>
                   <span>•</span>
-                  {course.className || "General"}
+                  <span>{course.className}</span>
                 </div>
                 <div className="flex flex-wrap gap-2 sm:gap-4 items-center mb-4">
                   <Badge className="bg-white/90 text-gray-900">
@@ -145,13 +279,8 @@ const StudentCourseDetails = ({ token }) => {
                   </Badge>
                 </div>
                 <div className="max-w-2xl">
-                  <Progress
-                    value={course.progress}
-                    className="h-2 bg-white/20"
-                  />
-                  <div className="text-sm mt-1">
-                    {course.progress}% completed
-                  </div>
+                  <Progress value={course.progress} className="h-2 bg-white/20" />
+                  <div className="text-sm mt-1">{course.progress}% completed</div>
                 </div>
               </div>
               <Button
@@ -173,69 +302,75 @@ const StudentCourseDetails = ({ token }) => {
             <TabsTrigger value="chapters" className="flex items-center gap-2">
               <BookOpen className="h-4 w-4" /> Chapters
             </TabsTrigger>
-            <TabsTrigger
-              value="assignments"
-              className="flex items-center gap-2"
-            >
+            <TabsTrigger value="assignments" className="flex items-center gap-2">
               <FileText className="h-4 w-4" /> Assignments
+              {course.assignments?.length > 0 && (
+                <Badge variant="secondary" className="ml-1">
+                  {course.assignments.length}
+                </Badge>
+              )}
             </TabsTrigger>
             <TabsTrigger value="exams" className="flex items-center gap-2">
               <AlertCircle className="h-4 w-4" /> Exams
+              {course.exams?.length > 0 && (
+                <Badge variant="secondary" className="ml-1">
+                  {course.exams.length}
+                </Badge>
+              )}
             </TabsTrigger>
           </TabsList>
 
-          {/* Chapters / Materials */}
+          {/* Chapters */}
           <TabsContent value="chapters">
             {tabLoading.chapters ? (
-              <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mt-8" />
+              <div className="flex justify-center py-12">
+                <Loader2 className="h-12 w-12 animate-spin text-primary" />
+              </div>
             ) : course.materials?.length > 0 ? (
               <div className="grid gap-6">
-                {course.materials.map((m, i) => {
-                  const fileExtension = m.fichier?.split(".").pop() || "";
-                  return (
-                    <Card
-                      key={i}
-                      className="p-6 shadow-md border border-primary/20 rounded-xl"
-                    >
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div className="flex-1">
-                          <h3 className="text-xl font-semibold flex items-center gap-2">
-                            <BookOpen className="h-5 w-5 text-primary" />
-                            {m.titre || "Untitled"}
-                          </h3>
-                          <p className="text-muted-foreground mt-2">
-                            {m.description || "No description available."}
-                          </p>
-                          <div className="flex flex-wrap gap-3 mt-4">
-                            {m.type && (
-                              <Badge className="bg-blue-100 text-blue-800 px-3 py-1">
-                                {m.type.toUpperCase()}
-                              </Badge>
-                            )}
-                            {m.uploadedAt && (
-                              <Badge className="bg-gray-100 text-gray-800 px-3 py-1">
-                                🗓 {new Date(m.uploadedAt).toLocaleDateString()}
-                              </Badge>
-                            )}
-                          </div>
+                {course.materials.map((m, i) => (
+                  <Card
+                    key={m._id || i}
+                    className="p-6 shadow-md border border-primary/20 rounded-xl"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="flex-1">
+                        <h3 className="text-xl font-semibold flex items-center gap-2">
+                          <BookOpen className="h-5 w-5 text-primary" />
+                          {m.titre || "Untitled"}
+                        </h3>
+                        <p className="text-muted-foreground mt-2">
+                          {m.description || "No description available."}
+                        </p>
+                        <div className="flex flex-wrap gap-3 mt-4">
+                          {m.type && (
+                            <Badge className="bg-blue-100 text-blue-800 px-3 py-1">
+                              {m.type.toUpperCase()}
+                            </Badge>
+                          )}
+                          {m.uploadedAt && (
+                            <Badge className="bg-gray-100 text-gray-800 px-3 py-1">
+                              🗓 {new Date(m.uploadedAt).toLocaleDateString()}
+                            </Badge>
+                          )}
                         </div>
-                        {m.fichier && (
-                          <div className="flex items-center mt-4 sm:mt-0">
-                            <a
-                              href={`http://localhost:5000/materials/${m.fichier}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              <Button className="bg-secondary text-white hover:bg-secondary/90">
-                                📥 download
-                              </Button>
-                            </a>
-                          </div>
-                        )}
                       </div>
-                    </Card>
-                  );
-                })}
+                      {m.fichier && (
+                        <div className="flex items-center mt-4 sm:mt-0">
+                          <a
+                            href={`http://localhost:5000/materials/${m.fichier}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <Button className="bg-secondary text-white hover:bg-secondary/90">
+                              <Download className="h-4 w-4 mr-2" /> Download
+                            </Button>
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  </Card>
+                ))}
               </div>
             ) : (
               <Card className="p-8 text-center">
@@ -248,18 +383,158 @@ const StudentCourseDetails = ({ token }) => {
           {/* Assignments */}
           <TabsContent value="assignments">
             {tabLoading.assignments ? (
-              <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mt-8" />
-            ) : course.assignments.length > 0 ? (
-              <div className="grid gap-4">
-                {course.assignments.map((a, i) => (
-                  <Card key={i} className="p-4">
-                    <h3 className="font-semibold">{a.title || "Untitled"}</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Due: {a.dueDate || "TBA"}
-                    </p>
-                    <Badge className="mt-2">{a.status || "Pending"}</Badge>
-                  </Card>
-                ))}
+              <div className="flex justify-center py-12">
+                <Loader2 className="h-12 w-12 animate-spin text-primary" />
+              </div>
+            ) : course.assignments?.length > 0 ? (
+              <div className="grid gap-6">
+                {course.assignments.map((a, i) => {
+                  const now = new Date();
+                  const dueDate = a.date ? new Date(a.date) : null;
+                  const submissionInfo = getSubmissionStatus(a);
+
+                  let status = "Pending";
+                  if (submissionInfo.submitted) {
+                    status = submissionInfo.data.note != null ? "Graded" : "Submitted";
+                  } else if (dueDate && dueDate < now) {
+                    status = "Overdue";
+                  }
+
+                  const formattedDate = dueDate?.toLocaleDateString("fr-FR", {
+                    weekday: "long",
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  }) || "TBA";
+
+                  const formattedTime = dueDate?.toLocaleTimeString("fr-FR", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  }) || "TBA";
+
+                  return (
+                    <Card
+                      key={a._id || i}
+                      className="p-6 shadow-md border border-primary/20 rounded-xl"
+                    >
+                      <div className="flex flex-col gap-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                          <div className="flex-1">
+                            <h3 className="text-xl font-semibold flex items-center gap-2">
+                              <FileText className="h-5 w-5 text-primary" />
+                              {a.nom || a.title || "Assignment"}
+                            </h3>
+                            <p className="text-muted-foreground mt-1">
+                              {a.description || "Assignment details will be shared soon."}
+                            </p>
+                            <div className="flex flex-wrap gap-3 mt-4">
+                              <Badge className="bg-primary/10 text-primary border border-primary/30 px-3 py-1">
+                                📅 {formattedDate}
+                              </Badge>
+                              <Badge className="bg-secondary/10 text-secondary border border-secondary/30 px-3 py-1">
+                                ⏰ {formattedTime}
+                              </Badge>
+                              <Badge className="bg-purple-100 text-purple-800">
+                                {a.type || "Assignment"}
+                              </Badge>
+                              {a.noteMax && (
+                                <Badge className="bg-blue-100 text-blue-800">
+                                  📝 Max Score: {a.noteMax}
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex justify-end">
+                            <Badge
+                              className={
+                                status === "Pending"
+                                  ? "bg-amber-500 text-white"
+                                  : status === "Submitted"
+                                  ? "bg-blue-500 text-white"
+                                  : status === "Graded"
+                                  ? "bg-emerald-500 text-white"
+                                  : "bg-red-500 text-white"
+                              }
+                            >
+                              {status.toUpperCase()}
+                            </Badge>
+                          </div>
+                        </div>
+
+                        {/* Submission info */}
+                        {submissionInfo.submitted && (
+                          <div className="bg-muted/50 p-4 rounded-lg border border-muted">
+                            <div className="flex items-start gap-3">
+                              <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
+                              <div className="flex-1">
+                                <p className="font-medium text-sm">
+                                  Submitted on {new Date(submissionInfo.data.dateSubmission).toLocaleString("fr-FR")}
+                                </p>
+                                {submissionInfo.data.note != null && (
+                                  <p className="text-sm mt-1">
+                                    <span className="font-semibold">Grade:</span> {submissionInfo.data.note}/{a.noteMax}
+                                  </p>
+                                )}
+                                {submissionInfo.data.commentaire && (
+                                  <p className="text-sm mt-1 text-muted-foreground">
+                                    <span className="font-semibold">Feedback:</span> {submissionInfo.data.commentaire}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Submit form */}
+                        {!submissionInfo.submitted && dueDate && dueDate > now && (
+                          <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-muted">
+                            <div className="flex-1">
+                              <input
+                                ref={(el) => (fileInputRefs.current[a._id] = el)}
+                                type="file"
+                                className="hidden"
+                                onChange={(e) => handleFileSelect(e, a._id)}
+                                accept=".pdf,.doc,.docx,.txt,.zip,.rar"
+                              />
+
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="w-full justify-start"
+                                onClick={() => triggerFileInput(a._id)}
+                              >
+                                📎 {selectedFileMap[a._id] ? (
+                                  selectedFileMap[a._id].name.length > 30
+                                    ? selectedFileMap[a._id].name.substring(0, 30) + "..."
+                                    : selectedFileMap[a._id].name
+                                ) : "Choose File (PDF, DOC, TXT, ZIP)"}
+                              </Button>
+                            </div>
+
+                            <Button
+                              className="bg-green-500 text-white hover:bg-green-600 disabled:opacity-50"
+                              onClick={() => handleSubmitAssignment(a._id)}
+                              disabled={
+                                submittingAssignment === a._id ||
+                                !selectedFileMap[a._id]
+                              }
+                            >
+                              {submittingAssignment === a._id ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  Submitting...
+                                </>
+                              ) : (
+                                "Submit Assignment"
+                              )}
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </Card>
+                  );
+                })}
               </div>
             ) : (
               <Card className="p-8 text-center">
@@ -272,47 +547,52 @@ const StudentCourseDetails = ({ token }) => {
           {/* Exams */}
           <TabsContent value="exams">
             {tabLoading.exams ? (
-              <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mt-8" />
-            ) : course.exams.length > 0 ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="h-12 w-12 animate-spin text-primary" />
+              </div>
+            ) : course.exams?.length > 0 ? (
               <div className="grid gap-6">
                 {course.exams.map((e, i) => {
                   const now = new Date();
                   const examDate = e.date ? new Date(e.date) : null;
 
-                  // Determine status based on date
                   let status = "TBA";
                   if (examDate) {
                     status = examDate > now ? "Upcoming" : "Completed";
                   }
 
-                  const formattedDate =
-                    examDate?.toLocaleDateString("fr-FR", {
-                      weekday: "long",
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                    }) || "TBA";
+                  const formattedDate = examDate?.toLocaleDateString("fr-FR", {
+                    weekday: "long",
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  }) || "TBA";
 
-                  const formattedTime =
-                    examDate?.toLocaleTimeString("fr-FR", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    }) || "TBA";
+                  const formattedTime = examDate?.toLocaleTimeString("fr-FR", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  }) || "TBA";
+
+                  const studentGrade = e.notes?.find(note => {
+                    const noteUserId = typeof note.etudiant === 'object'
+                      ? note.etudiant?._id
+                      : note.etudiant;
+                    return noteUserId === token;
+                  });
 
                   return (
                     <Card
-                      key={i}
+                      key={e._id || i}
                       className="p-6 shadow-md border border-primary/20 rounded-xl"
                     >
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div>
+                        <div className="flex-1">
                           <h3 className="text-xl font-semibold flex items-center gap-2">
-                            <AlertCircle className="h-5 w-5 text-primary" />{" "}
-                            {e.title || "Exam"}
+                            <AlertCircle className="h-5 w-5 text-primary" />
+                            {e.nom || e.title || "Exam"}
                           </h3>
                           <p className="text-muted-foreground mt-1">
-                            {e.description ||
-                              "Exam details will be shared soon."}
+                            {e.description || "Exam details will be shared soon."}
                           </p>
                           <div className="flex flex-wrap gap-3 mt-4">
                             <Badge className="bg-primary/10 text-primary border border-primary/30 px-3 py-1">
@@ -330,8 +610,22 @@ const StudentCourseDetails = ({ token }) => {
                               </Badge>
                             )}
                           </div>
+
+                          {studentGrade && (
+                            <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                              <p className="text-sm font-semibold text-green-800">
+                                Your Grade: {studentGrade.note}/{e.noteMax}
+                              </p>
+                              {studentGrade.commentaire && (
+                                <p className="text-sm text-green-700 mt-1">
+                                  {studentGrade.commentaire}
+                                </p>
+                              )}
+                            </div>
+                          )}
                         </div>
-                        <div className="flex justify-end flex-col sm:flex-row gap-2">
+
+                        <div className="flex justify-end flex-col gap-2">
                           <Badge
                             className={
                               status === "Upcoming"
@@ -343,17 +637,6 @@ const StudentCourseDetails = ({ token }) => {
                           >
                             {status.toUpperCase()}
                           </Badge>
-
-                          {e.notes && e.notes.length > 0 && (
-                            <Button
-                              className="ml-2 bg-blue-500 text-white hover:bg-blue-600"
-                              onClick={() =>
-                                alert("Here you will see the notes!")
-                              }
-                            >
-                              View Notes
-                            </Button>
-                          )}
                         </div>
                       </div>
                     </Card>

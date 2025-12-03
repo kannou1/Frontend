@@ -1,32 +1,48 @@
-import axios from 'axios';
+import axios from "axios";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 const API_URL = `${API_BASE_URL}/examen`;
 
-// Get all examen
+/* ====================== EXAM SERVICES ====================== */
+
+/** Create a new exam */
+export async function createExamen(examData) {
+  return await axios.post(`${API_URL}/create`, examData, {
+    withCredentials: true,
+  });
+}
+
+/** Get all exams (filtered by user role on backend) */
 export async function getAllExamen() {
-  return await axios.get(`${API_URL}/getAllExamen`, {
-    withCredentials: true,
-  });
+  return await axios.get(`${API_URL}/getAll`, { withCredentials: true });
 }
 
-// Get examen by ID
+/** Get exam by ID */
 export async function getExamenById(id) {
-  return await axios.get(`${API_URL}/getExamenById/${id}`, {
-    withCredentials: true,
-  });
+  return await axios.get(`${API_URL}/getById/${id}`, { withCredentials: true });
 }
 
-// Delete examen by ID
+/** Update exam by ID */
+export async function updateExamen(id, examData) {
+  return await axios.put(`${API_URL}/update/${id}`, examData, { withCredentials: true });
+}
+
+/** Delete exam by ID */
 export async function deleteExamenById(id) {
-  return await axios.delete(`${API_URL}/deleteExamen/${id}`, {
-    withCredentials: true,
-  });
+  return await axios.delete(`${API_URL}/delete/${id}`, { withCredentials: true });
 }
 
-// Delete all examen
-export async function deleteAllExamen() {
-  return await axios.delete(`${API_URL}/deleteAllExamen`, {
+/** Submit an assignment (upload file) */
+export async function submitAssignment(examenId, file) {
+  if (!file) throw new Error("Fichier requis");
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  return await axios.post(`${API_URL}/submitAssignment/${examenId}`, formData, {
     withCredentials: true,
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
   });
 }

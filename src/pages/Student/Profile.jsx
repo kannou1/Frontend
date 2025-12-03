@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { DatePicker } from "@/components/ui/date-picker";
 import {
   User,
   Mail,
@@ -107,6 +108,10 @@ export default function StudentProfile() {
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleDateChange = (date) => {
+    setFormData({ ...formData, datedeNaissance: date?.toISOString() });
   };
 
   const handleImageChange = (e) => {
@@ -541,12 +546,9 @@ export default function StudentProfile() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="datedeNaissance">Date of Birth</Label>
-                  <Input
-                    id="datedeNaissance"
-                    name="datedeNaissance"
-                    type="date"
-                    value={formData.datedeNaissance?.split("T")[0] || ""}
-                    onChange={handleChange}
+                  <DatePicker
+                    date={formData.datedeNaissance ? new Date(formData.datedeNaissance) : null}
+                    setDate={handleDateChange}
                     disabled={!isEditing}
                   />
                 </div>
