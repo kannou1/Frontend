@@ -57,14 +57,36 @@ export default function TeacherCourses() {
 
   // Calculate course statistics
   const getCourseStats = (course) => {
-    const studentsCount = course.classe?.etudiants?.length || 0;
-    const examsCount = course.examens?.length || 0;
-    const assignmentsCount = course.examens?.filter(e => 
+    // ✅ Get the actual number of students from the populated classe
+    let studentsCount = 0;
+    
+    if (course.classe) {
+      // If classe.etudiants is an array (populated)
+      if (Array.isArray(course.classe.etudiants)) {
+        studentsCount = course.classe.etudiants.length;
+      } 
+      // If classe has a count property
+      else if (course.classe.nombreEtudiants) {
+        studentsCount = course.classe.nombreEtudiants;
+      }
+    }
+
+    console.log(`📊 Course: ${course.nom}, Students: ${studentsCount}`, course.classe);
+
+    // ✅ Count exams and assignments correctly
+    const allExams = course.examens || [];
+    const examsOnly = allExams.filter(e => 
+      (e.type || "").toLowerCase() !== "assignment"
+    );
+    const assignments = allExams.filter(e => 
       (e.type || "").toLowerCase() === "assignment"
-    ).length || 0;
+    );
+    
+    const examsCount = examsOnly.length;
+    const assignmentsCount = assignments.length;
     
     // Calculate progress based on materials and exams completion
-    const totalItems = (course.examens?.length || 0) + (course.materials?.length || 0);
+    const totalItems = allExams.length + (course.materials?.length || 0);
     const progress = totalItems > 0 ? Math.min(Math.round((course.materials?.length || 0) / totalItems * 100), 100) : 0;
     
     return { studentsCount, examsCount, assignmentsCount, progress };
@@ -128,7 +150,7 @@ export default function TeacherCourses() {
                       <div className="flex items-center gap-2">
                         <Users className="h-4 w-4 text-muted-foreground" />
                         <span className="text-sm">
-                          {stats.studentsCount} students
+                          {stats.studentsCount} student{stats.studentsCount !== 1 ? 's' : ''}
                         </span>
                       </div>
                       
@@ -163,26 +185,26 @@ export default function TeacherCourses() {
                         variant="outline" 
                         size="sm"
                         onClick={() => {
-                          navigate(`/teacher/courses/${course._id}`, { 
-                            state: { activeTab: 'assignments' } 
-                          });
+                          // ✅ Navigate to a dedicated assignments page with course data
+                          navigate(`/teacher/courses/${course._id}/assignments`);
                         }}
+                        disabled={stats.assignmentsCount === 0}
                       >
                         <FileText className="h-4 w-4 mr-1" />
-                        Assignments
+                        Assignments ({stats.assignmentsCount})
                       </Button>
                       
                       <Button 
                         variant="outline" 
                         size="sm"
                         onClick={() => {
-                          navigate(`/teacher/courses/${course._id}`, { 
-                            state: { activeTab: 'exams' } 
-                          });
+                          // ✅ Navigate to a dedicated exams page with course data
+                          navigate(`/teacher/courses/${course._id}/exams`);
                         }}
+                        disabled={stats.examsCount === 0}
                       >
                         <AlertCircle className="h-4 w-4 mr-1" />
-                        Exams
+                        Exams ({stats.examsCount})
                       </Button>
                       
                       <Button 
