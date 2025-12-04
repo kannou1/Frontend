@@ -1,27 +1,37 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { 
-  FileText, 
-  Calendar, 
-  Clock, 
-  Users, 
-  Download, 
-  CheckCircle, 
-  XCircle, 
+import {
+  FileText,
+  Calendar,
+  Clock,
+  Users,
+  Download,
+  CheckCircle,
+  XCircle,
   AlertCircle,
   ArrowLeft,
   Eye,
   Edit,
   Trash2,
   BarChart,
-  Loader2,
-  RefreshCw
+  Loader2
 } from 'lucide-react';
-import { getAllExamen, deleteExamenById, createExamen, updateExamen } from '../../services/examenService';
+import {
+  getAllExamen,
+  deleteExamenById,
+  createExamen,
+  updateExamen,
+  downloadAssignmentFile,
+  downloadAllAssignmentFiles,
+  exportAssignmentData,
+  getAssignmentStats
+} from '../../services/examenService';
 import { getAllNotes, createNote, updateNoteById } from '../../services/noteService';
 import { getEtudiants } from '../../services/userService';
+import { getAllCours } from '../../services/coursService';
+import { AuthContext } from '../../contexts/AuthContext';
 
 const Toast = ({ message, onClose, type = "success" }) => (
   <div className={`fixed top-5 right-5 ${
@@ -35,6 +45,7 @@ const Toast = ({ message, onClose, type = "success" }) => (
 );
 
 export default function TeacherAssignments() {
+  const { user } = useContext(AuthContext);
   const [view, setView] = useState('list');
   const [selectedAssignment, setSelectedAssignment] = useState(null);
   const [assignments, setAssignments] = useState([]);
@@ -50,12 +61,18 @@ export default function TeacherAssignments() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingAssignment, setEditingAssignment] = useState(null);
   const [formData, setFormData] = useState({
-    titre: '',
+    nom: '',
     description: '',
-    dateFin: '',
-    note: '',
+    date: '',
+    noteMax: '',
     type: 'assignment'
   });
+  const [courses, setCourses] = useState([]);
+  const [selectedCourse, setSelectedCourse] = useState('');
+  const [exporting, setExporting] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [stats, setStats] = useState(null);
+  const [showStatsModal, setShowStatsModal] = useState(false);
 
   const showToast = (message, type = "success") => {
     setToast(message);
@@ -66,25 +83,29 @@ export default function TeacherAssignments() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [examsRes, usersRes, notesRes] = await Promise.all([
+      const [examsRes, usersRes, notesRes, coursRes] = await Promise.all([
         getAllExamen(),
         getEtudiants(),
-        getAllNotes()
+        getAllNotes(),
+        getAllCours()
       ]);
 
       const examsData = examsRes.data;
       const allUsers = usersRes.data;
       const notesData = notesRes.data;
+      // getAllCours returns data directly, not wrapped in .data
+      const coursesData = Array.isArray(coursRes) ? coursRes : (coursRes.data || []);
 
       // Filter for students only
       const studentsData = allUsers.filter(user => user.role === 'etudiant');
 
       // Filter for assignment type exams
-      const assignmentExams = examsData.filter(exam => exam.type === 'assignment');
+      const assignmentExams = examsData.filter(exam => exam.type === 'assignment' || exam.type === 'Assignment');
       
       setAssignments(assignmentExams);
       setStudents(studentsData);
       setNotes(notesData);
+      setCourses(coursesData);
       
       if (assignmentExams.length > 0) {
         showToast(`Loaded ${assignmentExams.length} assignment(s)`);
@@ -105,20 +126,27 @@ export default function TeacherAssignments() {
 
   const getSubmissions = (assignment) => {
     return students.map(student => {
+      // Look for submission in the assignment's submissions array
+      const submission = assignment.submissions?.find(s => 
+        s.studentId?.toString() === student._id?.toString()
+      );
+
+      // Look for grading note (from notes collection)
       const note = notes.find(n => 
-        n.examen === assignment._id && 
-        n.etudiant === student._id
+        n.examen?.toString() === assignment._id?.toString() && 
+        n.etudiant?.toString() === student._id?.toString()
       );
 
       return {
         studentId: student._id,
         studentName: `${student.nom} ${student.prenom}`,
-        submittedAt: note?.submittedAt || null,
-        grade: note?.note || null,
-        status: note?.note !== null && note?.note !== undefined ? 'graded' : 
-                note?.submittedAt ? 'submitted' : 'pending',
-        file: note?.file || null,
-        noteId: note?._id || null
+        submittedAt: submission?.dateSubmission || null,
+        grade: note?.note || submission?.note || null,
+        status: (note?.note !== null && note?.note !== undefined) ? 'graded' : 
+                submission?.dateSubmission ? 'submitted' : 'pending',
+        file: submission?.file || null,
+        noteId: note?._id || null,
+        submissionId: submission?._id || null
       };
     });
   };
@@ -130,8 +158,8 @@ export default function TeacherAssignments() {
     }
 
     const grade = parseFloat(gradeInput);
-    if (isNaN(grade) || grade < 0 || grade > selectedAssignment.note) {
-      showToast(`Grade must be between 0 and ${selectedAssignment.note}`, 'error');
+    if (isNaN(grade) || grade < 0 || grade > selectedAssignment.noteMax) {
+      showToast(`Grade must be between 0 and ${selectedAssignment.noteMax}`, 'error');
       return;
     }
 
@@ -177,12 +205,13 @@ export default function TeacherAssignments() {
 
   const resetForm = () => {
     setFormData({
-      titre: '',
+      nom: '',
       description: '',
-      dateFin: '',
-      note: '',
+      date: '',
+      noteMax: '',
       type: 'assignment'
     });
+    setSelectedCourse('');
     setEditingAssignment(null);
   };
 
@@ -194,12 +223,13 @@ export default function TeacherAssignments() {
   const handleOpenEdit = (assignment) => {
     setEditingAssignment(assignment);
     setFormData({
-      titre: assignment.titre,
+      nom: assignment.nom,
       description: assignment.description,
-      dateFin: assignment.dateFin ? new Date(assignment.dateFin).toISOString().slice(0, 16) : '',
-      note: assignment.note,
+      date: assignment.date ? new Date(assignment.date).toISOString().slice(0, 16) : '',
+      noteMax: assignment.noteMax,
       type: 'assignment'
     });
+    setSelectedCourse(assignment.coursId);
     setShowCreateModal(true);
   };
 
@@ -218,18 +248,27 @@ export default function TeacherAssignments() {
 
   const handleSubmitAssignment = async (e) => {
     e.preventDefault();
-    
-    if (!formData.titre || !formData.description || !formData.dateFin || !formData.note) {
+
+    if (!formData.nom || !formData.description || !formData.date || !formData.noteMax || !selectedCourse) {
       showToast('Please fill in all required fields', 'error');
+      return;
+    }
+
+    if (!user || !user._id) {
+      showToast('User not authenticated', 'error');
       return;
     }
 
     setSubmitting(true);
     try {
       const assignmentData = {
-        ...formData,
-        note: parseFloat(formData.note),
-        dateFin: new Date(formData.dateFin).toISOString()
+        nom: formData.nom,
+        description: formData.description,
+        date: new Date(formData.date).toISOString(),
+        noteMax: parseFloat(formData.noteMax),
+        type: formData.type,
+        coursId: selectedCourse,
+        enseignantId: user._id
       };
 
       if (editingAssignment) {
@@ -246,6 +285,93 @@ export default function TeacherAssignments() {
       showToast(`Failed to ${editingAssignment ? 'update' : 'create'} assignment: ${error.message}`, 'error');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleDownloadAllFiles = async (assignment = null) => {
+    const targetAssignment = assignment || selectedAssignment;
+    if (!targetAssignment) return;
+
+    setDownloading(true);
+    try {
+      const response = await downloadAllAssignmentFiles(targetAssignment._id);
+
+      // Create a blob URL and trigger download
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `${targetAssignment.nom}_submissions.zip`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      showToast('All files downloaded successfully');
+    } catch (error) {
+      console.error('Download error:', error);
+      showToast('Failed to download files: ' + error.message, 'error');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const handleExportData = async (format = 'csv') => {
+    if (!selectedAssignment) return;
+
+    setExporting(true);
+    try {
+      const response = await exportAssignmentData(selectedAssignment._id, format);
+
+      // Create a blob URL and trigger download
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `${selectedAssignment.nom}_data.${format}`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      showToast('Data exported successfully');
+    } catch (error) {
+      console.error('Export error:', error);
+      showToast('Failed to export data: ' + error.message, 'error');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleViewStats = async () => {
+    if (!selectedAssignment) return;
+
+    try {
+      const response = await getAssignmentStats(selectedAssignment._id);
+      setStats(response.data);
+      setShowStatsModal(true);
+    } catch (error) {
+      console.error('Stats error:', error);
+      showToast('Failed to load statistics: ' + error.message, 'error');
+    }
+  };
+
+  const handleDownloadFile = async (examenId, submissionId, fileName) => {
+    try {
+      const response = await downloadAssignmentFile(examenId, submissionId);
+
+      // Create a blob URL and trigger download
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', fileName || 'assignment_file');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      showToast('File downloaded successfully');
+    } catch (error) {
+      console.error('File download error:', error);
+      showToast('Failed to download file: ' + error.message, 'error');
     }
   };
 
@@ -324,7 +450,7 @@ export default function TeacherAssignments() {
             <CardHeader className="border-b bg-muted/50">
               <div className="flex justify-between items-start">
                 <div className="space-y-2">
-                  <CardTitle className="text-2xl">{selectedAssignment.titre}</CardTitle>
+                  <CardTitle className="text-2xl">{selectedAssignment.nom}</CardTitle>
                   <CardDescription className="text-base">
                     {selectedAssignment.description}
                   </CardDescription>
@@ -334,11 +460,20 @@ export default function TeacherAssignments() {
                     <Edit className="h-4 w-4 mr-1" />
                     Edit
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => showToast('Export feature coming soon', 'info')}>
-                    <Download className="h-4 w-4 mr-1" />
-                    Export
+                  <Button variant="outline" size="sm" onClick={() => handleExportData('csv')} disabled={exporting}>
+                    {exporting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                        Exporting...
+                      </>
+                    ) : (
+                      <>
+                        <Download className="h-4 w-4 mr-1" />
+                        Export
+                      </>
+                    )}
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => showToast('Stats feature coming soon', 'info')}>
+                  <Button variant="outline" size="sm" onClick={handleViewStats}>
                     <BarChart className="h-4 w-4 mr-1" />
                     Stats
                   </Button>
@@ -351,12 +486,12 @@ export default function TeacherAssignments() {
                   <p className="text-sm text-muted-foreground">Due Date</p>
                   <p className="font-semibold flex items-center gap-2">
                     <Calendar className="h-4 w-4 text-primary" />
-                    {formatDate(selectedAssignment.dateFin)}
+                    {formatDate(selectedAssignment.date)}
                   </p>
                 </div>
                 <div className="space-y-1 p-4 border rounded-lg bg-muted/50">
                   <p className="text-sm text-muted-foreground">Total Points</p>
-                  <p className="font-semibold text-2xl">{selectedAssignment.note}</p>
+                  <p className="font-semibold text-2xl">{selectedAssignment.noteMax}</p>
                 </div>
                 <div className="space-y-1 p-4 border rounded-lg bg-blue-500/10">
                   <p className="text-sm text-muted-foreground">Submissions</p>
@@ -377,9 +512,18 @@ export default function TeacherAssignments() {
                   <CardTitle>Student Submissions</CardTitle>
                   <CardDescription>Review and grade student work</CardDescription>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => showToast('Download all feature coming soon', 'info')}>
-                  <Download className="h-4 w-4 mr-1" />
-                  Download All
+                <Button variant="outline" size="sm" onClick={handleDownloadAllFiles} disabled={downloading}>
+                  {downloading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                      Downloading...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="h-4 w-4 mr-1" />
+                      Download All
+                    </>
+                  )}
                 </Button>
               </div>
             </CardHeader>
@@ -407,7 +551,7 @@ export default function TeacherAssignments() {
                     <div className="flex items-center gap-3">
                       {submission.grade !== null ? (
                         <Badge variant="secondary" className="text-lg px-4 py-2 font-bold">
-                          {submission.grade}/{selectedAssignment.note}
+                          {submission.grade}/{selectedAssignment.noteMax}
                         </Badge>
                       ) : (
                         <span className="text-muted-foreground text-sm">Not graded</span>
@@ -416,7 +560,7 @@ export default function TeacherAssignments() {
                         {submission.status}
                       </Badge>
                       {submission.file && (
-                        <Button variant="outline" size="sm" onClick={() => showToast('File download feature coming soon', 'info')}>
+                        <Button variant="outline" size="sm" onClick={() => handleDownloadFile(selectedAssignment._id, submission.submissionId, submission.file)}>
                           <Download className="h-4 w-4 mr-1" />
                           File
                         </Button>
@@ -497,11 +641,102 @@ export default function TeacherAssignments() {
                 </CardContent>
               </Card>
             </div>
-          )}
-        </div>
+        )}
+
+        {/* Stats Modal */}
+        {showStatsModal && stats && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+              <CardHeader>
+                <CardTitle>Assignment Statistics</CardTitle>
+                <CardDescription>
+                  Detailed statistics for {selectedAssignment?.nom}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="p-4 border rounded-lg bg-blue-500/10">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                      <span className="text-sm font-medium">Total Students</span>
+                    </div>
+                    <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.totalStudents || 0}</p>
+                  </div>
+                  <div className="p-4 border rounded-lg bg-green-500/10">
+                    <div className="flex items-center gap-2 mb-2">
+                      <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+                      <span className="text-sm font-medium">Submissions</span>
+                    </div>
+                    <p className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.totalSubmissions || 0}</p>
+                  </div>
+                  <div className="p-4 border rounded-lg bg-purple-500/10">
+                    <div className="flex items-center gap-2 mb-2">
+                      <BarChart className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                      <span className="text-sm font-medium">Graded</span>
+                    </div>
+                    <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{stats.gradedSubmissions || 0}</p>
+                  </div>
+                  <div className="p-4 border rounded-lg bg-orange-500/10">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Clock className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+                      <span className="text-sm font-medium">Pending</span>
+                    </div>
+                    <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">{stats.pendingSubmissions || 0}</p>
+                  </div>
+                </div>
+
+                {stats.averageGrade !== undefined && (
+                  <div className="p-4 border rounded-lg bg-gradient-to-r from-primary/10 to-primary/5">
+                    <div className="flex items-center gap-2 mb-2">
+                      <BarChart className="h-5 w-5 text-primary" />
+                      <span className="text-sm font-medium">Average Grade</span>
+                    </div>
+                    <p className="text-3xl font-bold text-primary">
+                      {stats.averageGrade.toFixed(1)}/{selectedAssignment?.noteMax || 0}
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {((stats.averageGrade / (selectedAssignment?.noteMax || 1)) * 100).toFixed(1)}% average
+                    </p>
+                  </div>
+                )}
+
+                {stats.gradeDistribution && (
+                  <div className="space-y-4">
+                    <h4 className="text-lg font-semibold">Grade Distribution</h4>
+                    <div className="space-y-2">
+                      {Object.entries(stats.gradeDistribution).map(([range, count]) => (
+                        <div key={range} className="flex items-center justify-between p-2 border rounded">
+                          <span className="text-sm font-medium">{range}</span>
+                          <div className="flex items-center gap-2">
+                            <div className="w-24 bg-muted rounded-full h-2">
+                              <div
+                                className="bg-primary h-2 rounded-full"
+                                style={{
+                                  width: `${stats.totalSubmissions > 0 ? (count / stats.totalSubmissions) * 100 : 0}%`
+                                }}
+                              />
+                            </div>
+                            <span className="text-sm text-muted-foreground w-8 text-right">{count}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-end pt-4">
+                  <Button onClick={() => setShowStatsModal(false)}>
+                    Close
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
-    );
-  }
+    </div>
+  );
+}
 
   return (
     <div className="min-h-screen bg-background p-6">
@@ -518,10 +753,6 @@ export default function TeacherAssignments() {
             </p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="lg" onClick={fetchData}>
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Refresh
-            </Button>
             <Button size="lg" onClick={handleOpenCreate}>
               <FileText className="h-4 w-4 mr-2" />
               Create Assignment
@@ -533,7 +764,7 @@ export default function TeacherAssignments() {
           {assignments.map((assignment) => {
             const submissions = getSubmissions(assignment);
             const stats = calculateStats(submissions);
-            const isOverdue = new Date(assignment.dateFin) < new Date();
+            const isOverdue = new Date(assignment.date) < new Date();
             
             return (
               <Card key={assignment._id} className="hover:shadow-lg transition-all border">
@@ -541,7 +772,7 @@ export default function TeacherAssignments() {
                   <div className="flex justify-between items-start">
                     <div className="space-y-2 flex-1">
                       <div className="flex items-center gap-2">
-                        <CardTitle className="text-2xl">{assignment.titre}</CardTitle>
+                        <CardTitle className="text-2xl">{assignment.nom}</CardTitle>
                         {isOverdue && (
                           <Badge variant="destructive" className="animate-pulse">Overdue</Badge>
                         )}
@@ -559,14 +790,14 @@ export default function TeacherAssignments() {
                         <Calendar className="h-5 w-5 text-primary" />
                         <div>
                           <p className="text-xs text-muted-foreground">Due Date</p>
-                          <p className="text-sm font-semibold">{new Date(assignment.dateFin).toLocaleDateString()}</p>
+                          <p className="text-sm font-semibold">{new Date(assignment.date).toLocaleDateString()}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 p-3 border rounded-lg bg-muted/50">
                         <FileText className="h-5 w-5 text-primary" />
                         <div>
                           <p className="text-xs text-muted-foreground">Points</p>
-                          <p className="text-sm font-semibold">{assignment.note}</p>
+                          <p className="text-sm font-semibold">{assignment.noteMax}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 p-3 border rounded-lg bg-blue-500/10">
@@ -606,9 +837,18 @@ export default function TeacherAssignments() {
                         <Edit className="h-4 w-4 mr-1" />
                         Edit
                       </Button>
-                      <Button variant="outline" onClick={() => showToast('Download all feature coming soon', 'info')}>
-                        <Download className="h-4 w-4 mr-1" />
-                        Download All
+                      <Button variant="outline" onClick={() => handleDownloadAllFiles(assignment)} disabled={downloading}>
+                        {downloading ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                            Downloading...
+                          </>
+                        ) : (
+                          <>
+                            <Download className="h-4 w-4 mr-1" />
+                            Download All
+                          </>
+                        )}
                       </Button>
                       <Button 
                         variant="outline" 
@@ -657,8 +897,8 @@ export default function TeacherAssignments() {
                     </label>
                     <input
                       type="text"
-                      name="titre"
-                      value={formData.titre}
+                      name="nom"
+                      value={formData.nom}
                       onChange={handleFormChange}
                       className="w-full p-2 border rounded-md bg-background"
                       placeholder="Enter assignment title"
@@ -686,35 +926,55 @@ export default function TeacherAssignments() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="text-sm font-medium mb-2 block">
-                        Due Date <span className="text-red-500">*</span>
+                        Course <span className="text-red-500">*</span>
                       </label>
-                      <input
-                        type="datetime-local"
-                        name="dateFin"
-                        value={formData.dateFin}
-                        onChange={handleFormChange}
+                      <select
+                        value={selectedCourse}
+                        onChange={(e) => setSelectedCourse(e.target.value)}
                         className="w-full p-2 border rounded-md bg-background"
                         required
                         disabled={submitting}
-                      />
+                      >
+                        <option value="">Select a course</option>
+                        {courses && courses.length > 0 && courses.map(course => (
+                          <option key={course._id} value={course._id}>
+                            {course.nom}
+                          </option>
+                        ))}
+                      </select>
                     </div>
 
                     <div>
                       <label className="text-sm font-medium mb-2 block">
-                        Total Points <span className="text-red-500">*</span>
+                        Due Date <span className="text-red-500">*</span>
                       </label>
                       <input
-                        type="number"
-                        name="note"
-                        value={formData.note}
+                        type="datetime-local"
+                        name="date"
+                        value={formData.date}
                         onChange={handleFormChange}
                         className="w-full p-2 border rounded-md bg-background"
-                        placeholder="e.g., 100"
-                        min="1"
                         required
                         disabled={submitting}
                       />
                     </div>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">
+                      Total Points <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      name="noteMax"
+                      value={formData.noteMax}
+                      onChange={handleFormChange}
+                      className="w-full p-2 border rounded-md bg-background"
+                      placeholder="e.g., 100"
+                      min="1"
+                      required
+                      disabled={submitting}
+                    />
                   </div>
 
                   <div className="flex gap-2 justify-end pt-4">

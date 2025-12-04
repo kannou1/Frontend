@@ -46,3 +46,34 @@ export async function submitAssignment(examenId, file) {
     },
   });
 }
+
+/** Download a single assignment file */
+export async function downloadAssignmentFile(examenId, fileId) {
+  return await axios.get(`${API_URL}/downloadAssignmentFile/${examenId}/${fileId}`, {
+    withCredentials: true,
+    responseType: 'blob',
+  });
+}
+
+/** Download all assignment files for an exam */
+export async function downloadAllAssignmentFiles(examenId) {
+  return await axios.get(`${API_URL}/downloadAllAssignmentFiles/${examenId}`, {
+    withCredentials: true,
+    responseType: 'blob',
+  });
+}
+
+/** Export assignment data */
+export async function exportAssignmentData(examenId, format = 'csv') {
+  return await axios.get(`${API_URL}/exportAssignmentData/${examenId}?format=${format}`, {
+    withCredentials: true,
+    responseType: 'blob',
+  });
+}
+
+/** Get assignment statistics */
+export async function getAssignmentStats(examenId) {
+  return await axios.get(`${API_URL}/getAssignmentStats/${examenId}`, {
+    withCredentials: true,
+  });
+}
