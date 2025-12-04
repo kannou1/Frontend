@@ -48,8 +48,8 @@ export async function submitAssignment(examenId, file) {
 }
 
 /** Download a single assignment file */
-export async function downloadAssignmentFile(examenId, fileId) {
-  return await axios.get(`${API_URL}/downloadAssignmentFile/${examenId}/${fileId}`, {
+export async function downloadAssignmentFile(examenId, studentId) {
+  return await axios.get(`${API_URL}/downloadAssignmentFile/${examenId}/${studentId}`, {
     withCredentials: true,
     responseType: 'blob',
   });

@@ -1,71 +1,58 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, Mail, Phone, Calendar, BookOpen, TrendingUp } from 'lucide-react';
+import { Search, Mail, Phone, Calendar, BookOpen, TrendingUp, Loader2 } from 'lucide-react';
+import { getEtudiants } from '../../services/userService';
+import { getAllCours } from '../../services/coursService';
 
 export default function TeacherStudents() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCourse, setSelectedCourse] = useState('all');
 
-  const courses = [
-    { id: 'all', name: 'All Courses' },
-    { id: 'math101', name: 'Mathematics 101' },
-    { id: 'alg201', name: 'Algebra II' },
-    { id: 'calc301', name: 'Calculus I' }
-  ];
+  const [courses, setCourses] = useState([{ id: 'all', name: 'All Courses' }]);
+  const [students, setStudents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showProfile, setShowProfile] = useState(false);
+  const [profileStudent, setProfileStudent] = useState(null);
 
-  const students = [
-    {
-      id: 1,
-      name: 'John Doe',
-      rollNo: 'ST001',
-      email: 'john.doe@student.edu',
-      phone: '+1 234 567 8901',
-      courses: ['Mathematics 101', 'Physics 101'],
-      grade: 'A',
-      attendance: 95,
-      lastActive: '2024-01-15'
-    },
-    {
-      id: 2,
-      name: 'Jane Smith',
-      rollNo: 'ST002',
-      email: 'jane.smith@student.edu',
-      phone: '+1 234 567 8902',
-      courses: ['Algebra II', 'Chemistry 101'],
-      grade: 'B+',
-      attendance: 88,
-      lastActive: '2024-01-14'
-    },
-    {
-      id: 3,
-      name: 'Bob Johnson',
-      rollNo: 'ST003',
-      email: 'bob.johnson@student.edu',
-      phone: '+1 234 567 8903',
-      courses: ['Mathematics 101', 'Calculus I'],
-      grade: 'A-',
-      attendance: 92,
-      lastActive: '2024-01-13'
-    },
-    {
-      id: 4,
-      name: 'Alice Williams',
-      rollNo: 'ST004',
-      email: 'alice.williams@student.edu',
-      phone: '+1 234 567 8904',
-      courses: ['Algebra II'],
-      grade: 'B',
-      attendance: 85,
-      lastActive: '2024-01-12'
-    }
-  ];
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      setLoading(true);
+      try {
+        const [usersRes, coursRes] = await Promise.all([getEtudiants(), getAllCours()]);
+        if (!mounted) return;
+        const studs = Array.isArray(usersRes.data) ? usersRes.data : (usersRes || []);
+        setStudents(studs.map(s => ({
+          ...s,
+          id: s._id,
+          displayName: `${s.prenom || ''} ${s.nom || ''}`.trim(),
+          phone: s.NumTel || s.NumTelEnseignant || s.phone || '',
+          address: s.Adresse || s.address || '',
+          dob: s.datedeNaissance || s.datedeNaissance || null,
+          classes: s.classes || (s.classe ? [s.classe] : []),
+          email: s.email || s.mail || ''
+        })));
+
+        const coursData = Array.isArray(coursRes) ? coursRes : (coursRes.data || []);
+        const mapped = [{ id: 'all', name: 'All Courses' }, ...coursData.map(c => ({ id: c._id, name: c.nom }))];
+        setCourses(mapped);
+      } catch (err) {
+        console.error('Failed to load students/courses', err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    load();
+    return () => { mounted = false; };
+  }, []);
 
   const getGradeColor = (grade) => {
+    if (!grade || typeof grade !== 'string') return 'bg-gray-100 text-gray-800';
     switch (grade.charAt(0)) {
       case 'A': return 'bg-green-100 text-green-800';
       case 'B': return 'bg-blue-100 text-blue-800';
@@ -104,13 +91,19 @@ export default function TeacherStudents() {
             </SelectTrigger>
             <SelectContent>
               {courses.map((course) => (
-                <SelectItem key={course.id} value={course.id}>
-                  {course.name}
+                <SelectItem key={course.id || course._id} value={course.id || course._id || 'all'}>
+                  {course.name || course.nom}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
+
+        {loading && (
+          <div className="py-6">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        )}
 
         <Tabs defaultValue="overview" className="w-full">
           <TabsList>
@@ -119,16 +112,21 @@ export default function TeacherStudents() {
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4">
-            {students.map((student) => (
+            {students.filter(s => {
+              const q = searchTerm.trim().toLowerCase();
+              const matchSearch = q === '' || `${s.nom || s.name} ${s.prenom || ''}`.toLowerCase().includes(q) || (s.email || '').toLowerCase().includes(q) || (s.rollNo || '').toLowerCase().includes(q);
+              const matchCourse = selectedCourse === 'all' || (s.courses || []).some(c => (c._id && c._id.toString() === selectedCourse) || c === selectedCourse || (c.nom && c.nom === (courses.find(cs => (cs.id === selectedCourse || cs._id === selectedCourse)?.name) || {}).nom));
+              return matchSearch && matchCourse;
+            }).map((student) => (
               <Card key={student.id} className="hover:shadow-lg transition-shadow">
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div className="space-y-1">
-                      <CardTitle className="text-lg">{student.name}</CardTitle>
-                      <CardDescription>Roll No: {student.rollNo}</CardDescription>
+                      <CardTitle className="text-lg">{student.nom ? `${student.nom} ${student.prenom}` : student.name}</CardTitle>
+                      <CardDescription>Roll No: {student.rollNo || student._id}</CardDescription>
                     </div>
-                    <Badge className={getGradeColor(student.grade)}>
-                      Grade: {student.grade}
+                    <Badge className={getGradeColor(student.grade || (student.note || 'N/A'))}>
+                      Grade: {student.grade || student.note || 'N/A'}
                     </Badge>
                   </div>
                 </CardHeader>
@@ -136,25 +134,25 @@ export default function TeacherStudents() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                     <div className="flex items-center gap-2">
                       <Mail className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">{student.email}</span>
+                      <span className="text-sm">{student.email || student.mail || ''}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">{student.attendance}% attendance</span>
+                      <span className="text-sm">{student.attendance || student.presence || 0}% attendance</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Calendar className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">Last active: {student.lastActive}</span>
+                      <span className="text-sm">Last active: {student.lastActive || student.updatedAt || ''}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 mb-4">
                     <BookOpen className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm">Courses: {student.courses.join(', ')}</span>
+                    <span className="text-sm">Courses: {(student.courses || []).map(c => c.nom || c).join(', ')}</span>
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm">View Profile</Button>
-                    <Button variant="outline" size="sm">Send Message</Button>
-                    <Button variant="outline" size="sm">View Grades</Button>
+                    <Button variant="outline" size="sm" onClick={() => { setProfileStudent(student); setShowProfile(true); }}>View Profile</Button>
+                    <Button variant="outline" size="sm" onClick={() => window.location.href = `mailto:${student.email || student.mail || ''}`}>Send Message</Button>
+                    <Button variant="outline" size="sm" onClick={() => {/* TODO: navigate to grades page */}}>View Grades</Button>
                   </div>
                 </CardContent>
               </Card>
@@ -162,16 +160,21 @@ export default function TeacherStudents() {
           </TabsContent>
 
           <TabsContent value="details" className="space-y-4">
-            {students.map((student) => (
+            {students.filter(s => {
+              const q = searchTerm.trim().toLowerCase();
+              const matchSearch = q === '' || `${s.nom || s.name} ${s.prenom || ''}`.toLowerCase().includes(q) || (s.email || '').toLowerCase().includes(q);
+              const matchCourse = selectedCourse === 'all' || (s.courses || []).some(c => (c._id && c._id.toString() === selectedCourse) || c === selectedCourse || (c.nom && c.nom === (courses.find(cs => cs.id === selectedCourse || cs._id === selectedCourse)?.name)));
+              return matchSearch && matchCourse;
+            }).map((student) => (
               <Card key={student.id}>
                 <CardHeader>
                   <div className="flex items-center gap-4">
                     <div className="h-12 w-12 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white font-semibold">
-                      {student.name.charAt(0)}
+                      {(student.nom || student.name || '').charAt(0)}
                     </div>
                     <div>
-                      <CardTitle className="text-xl">{student.name}</CardTitle>
-                      <CardDescription>{student.rollNo}</CardDescription>
+                      <CardTitle className="text-xl">{student.nom ? `${student.nom} ${student.prenom}` : student.name}</CardTitle>
+                      <CardDescription>{student.rollNo || student._id}</CardDescription>
                     </div>
                   </div>
                 </CardHeader>
@@ -209,8 +212,8 @@ export default function TeacherStudents() {
                       <div>
                         <h4 className="font-medium mb-2">Enrolled Courses</h4>
                         <div className="space-y-2">
-                          {student.courses.map((course, index) => (
-                            <Badge key={index} variant="secondary">{course}</Badge>
+                          {(student.courses || []).map((course, index) => (
+                            <Badge key={index} variant="secondary">{course.nom || course}</Badge>
                           ))}
                         </div>
                       </div>
@@ -223,15 +226,37 @@ export default function TeacherStudents() {
                     </div>
                   </div>
                   <div className="flex gap-2 mt-6">
-                    <Button variant="outline">Edit Student</Button>
-                    <Button variant="outline">View Assignments</Button>
-                    <Button variant="outline">Contact Parent</Button>
+                    <Button variant="outline" onClick={() => { setProfileStudent(student); setShowProfile(true); }}>Edit Student</Button>
+                    <Button variant="outline" onClick={() => {/* TODO: open assignments */}}>View Assignments</Button>
+                    <Button variant="outline" onClick={() => {/* TODO: contact parent */}}>Contact Parent</Button>
                   </div>
                 </CardContent>
               </Card>
             ))}
           </TabsContent>
         </Tabs>
+
+        {/* Profile Modal */}
+        {showProfile && profileStudent && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <Card className="w-full max-w-lg">
+              <CardHeader>
+                <CardTitle>{profileStudent.nom ? `${profileStudent.nom} ${profileStudent.prenom}` : profileStudent.name}</CardTitle>
+                <CardDescription>Profile</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2"><Mail className="h-4 w-4" /> <span>{profileStudent.email || profileStudent.mail}</span></div>
+                  <div className="flex items-center gap-2"><Phone className="h-4 w-4" /> <span>{profileStudent.phone || ''}</span></div>
+                  <div className="mt-4">Courses: {(profileStudent.courses || []).map(c => c.nom || c).join(', ')}</div>
+                </div>
+                <div className="flex justify-end mt-4">
+                  <Button variant="outline" onClick={() => setShowProfile(false)}>Close</Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
     </div>
   );
