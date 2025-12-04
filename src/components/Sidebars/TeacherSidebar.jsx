@@ -9,6 +9,7 @@ import {
   Bell,
   Users,
   GraduationCap,
+  FileText ,
 } from "lucide-react";
 
 import {
@@ -33,6 +34,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000
 const navItems = [
   { path: "", label: "Dashboard", icon: LayoutDashboard },
   { path: "courses", label: "Courses", icon: BookOpen },
+  { path: "assignments", label: "Assignments", icon: FileText },
   { path: "students", label: "Students", icon: Users },
   { path: "grading", label: "Grading", icon: GraduationCap },
   { path: "attendance", label: "Attendance", icon: UserCheck },
