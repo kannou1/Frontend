@@ -37,22 +37,22 @@ export const createUser = async (userData) => {
 // ------------------- GET USERS -------------------
 
 export const getAllUsers = () =>
-  axios.get(`${API_URL}/getAllUsers`, { withCredentials: true });
+  axios.get(`${API_URL}/getAllUsers`, { withCredentials: true }).then(res => res.data);
 
 export const getAdmins = () =>
-  axios.get(`${API_URL}/admins`, { withCredentials: true });
+  axios.get(`${API_URL}/admins`, { withCredentials: true }).then(res => res.data);
 
 export const getEnseignants = () =>
-  axios.get(`${API_URL}/enseignants`, { withCredentials: true });
+  axios.get(`${API_URL}/enseignants`, { withCredentials: true }).then(res => res.data);
 
 export const getEtudiants = () =>
-  axios.get(`${API_URL}/etudiants`, { withCredentials: true });
+  axios.get(`${API_URL}/etudiants`, { withCredentials: true }).then(res => res.data);
 
 export const getUserById = (id) =>
-  axios.get(`${API_URL}/getUserById/${id}`, { withCredentials: true });
+  axios.get(`${API_URL}/getUserById/${id}`, { withCredentials: true }).then(res => res.data);
 
 export const getUserAuth = () =>
-  axios.get(`${API_URL}/me`, { withCredentials: true });
+  axios.get(`${API_URL}/me`, { withCredentials: true }).then(res => res.data);
 
 // ------------------- UPDATE USERS -------------------
 

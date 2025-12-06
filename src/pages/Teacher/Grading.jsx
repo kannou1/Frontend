@@ -1,15 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { 
-  FileText, 
-  Calendar, 
-  Clock, 
-  Users, 
-  Download, 
-  CheckCircle, 
-  XCircle, 
+import {
+  FileText,
+  Calendar,
+  Clock,
+  Users,
+  Download,
+  CheckCircle,
+  XCircle,
   AlertCircle,
   ArrowLeft,
   Eye,
@@ -18,60 +18,15 @@ import {
   BarChart,
   TrendingUp,
   Award,
-  PieChart
+  PieChart,
+  RefreshCw,
+  Loader2
 } from 'lucide-react';
+import { getAllExamen } from '@/services/examenService';
+import { getAllNotes, createNote, updateNoteById } from '@/services/noteService';
+import { getUserAuth } from '@/services/userService';
 
-const mockExams = [
-  {
-    _id: '1',
-    titre: 'Midterm Exam - Web Development',
-    description: 'Comprehensive exam covering React, Node.js, and database fundamentals.',
-    date: '2024-12-10T09:00:00Z',
-    duree: 120,
-    note: 100,
-    type: 'exam',
-    salle: 'Room A101',
-    results: [
-      { studentId: 's1', studentName: 'Alice Johnson', grade: 88, status: 'graded', attendance: 'present' },
-      { studentId: 's2', studentName: 'Bob Smith', grade: 76, status: 'graded', attendance: 'present' },
-      { studentId: 's3', studentName: 'Carol White', grade: 92, status: 'graded', attendance: 'present' },
-      { studentId: 's4', studentName: 'David Brown', grade: null, status: 'absent', attendance: 'absent' },
-      { studentId: 's5', studentName: 'Emma Davis', grade: 85, status: 'graded', attendance: 'present' },
-      { studentId: 's6', studentName: 'Frank Wilson', grade: 79, status: 'graded', attendance: 'present' },
-    ]
-  },
-  {
-    _id: '2',
-    titre: 'Final Exam - Advanced JavaScript',
-    description: 'Final examination covering async programming, ES6+ features, and modern frameworks.',
-    date: '2024-12-20T14:00:00Z',
-    duree: 180,
-    note: 150,
-    type: 'exam',
-    salle: 'Room B205',
-    results: [
-      { studentId: 's1', studentName: 'Alice Johnson', grade: null, status: 'pending', attendance: null },
-      { studentId: 's2', studentName: 'Bob Smith', grade: null, status: 'pending', attendance: null },
-      { studentId: 's3', studentName: 'Carol White', grade: null, status: 'pending', attendance: null },
-    ]
-  },
-  {
-    _id: '3',
-    titre: 'Quiz - Database Systems',
-    description: 'Short quiz on SQL queries and database normalization.',
-    date: '2024-11-28T10:00:00Z',
-    duree: 30,
-    note: 25,
-    type: 'exam',
-    salle: 'Room C302',
-    results: [
-      { studentId: 's1', studentName: 'Alice Johnson', grade: 23, status: 'graded', attendance: 'present' },
-      { studentId: 's2', studentName: 'Bob Smith', grade: 19, status: 'graded', attendance: 'present' },
-      { studentId: 's3', studentName: 'Carol White', grade: 25, status: 'graded', attendance: 'present' },
-      { studentId: 's4', studentName: 'David Brown', grade: 21, status: 'graded', attendance: 'present' },
-    ]
-  }
-];
+
 
 const Toast = ({ message, onClose, type = "success" }) => (
   <div className={`fixed top-5 right-5 ${
@@ -92,6 +47,95 @@ export default function TeacherExams() {
   const [gradingStudent, setGradingStudent] = useState(null);
   const [gradeInput, setGradeInput] = useState('');
   const [showStats, setShowStats] = useState(false);
+  const [exams, setExams] = useState([]);
+  const [notes, setNotes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+
+  // Fetch data from API
+  const fetchData = async () => {
+    try {
+      setRefreshing(true);
+      setError(null);
+
+      const [examsData, notesData] = await Promise.all([
+        getAllExamen(),
+        getAllNotes()
+      ]);
+
+      // Filter out assignments - only show exams and quizzes
+      const filteredExams = examsData.data.filter(exam =>
+        exam.type !== 'assignment' && exam.type !== 'Assignment'
+      );
+
+      // Transform exams data to include results
+      const transformedExams = filteredExams.map(exam => {
+        // Get all students from the class
+        const classStudents = exam.classeId?.etudiants || [];
+
+        // Get existing grades for this exam
+        const examNotes = notesData.data.filter(note =>
+          note.examen === exam._id ||
+          note.examen?._id === exam._id ||
+          note.examen?.toString() === exam._id.toString()
+        );
+
+        // Create results for all students in the class
+        const results = classStudents.map(student => {
+          const existingNote = examNotes.find(note =>
+            note.etudiant === student._id ||
+            note.etudiant?._id === student._id ||
+            note.etudiant?.toString() === student._id.toString()
+          );
+          return {
+            studentId: student._id,
+            studentName: student.prenom && student.nom ? `${student.prenom} ${student.nom}` : student.nom || student.prenom || 'Unknown Student',
+            grade: existingNote?.score || null,
+            status: existingNote?.score !== null && existingNote?.score !== undefined ? 'graded' : 'pending',
+            attendance: existingNote?.score !== null && existingNote?.score !== undefined ? 'present' : null
+          };
+        });
+
+        return {
+          ...exam,
+          titre: exam.nom, // Map nom to titre for compatibility
+          note: exam.noteMax, // Map noteMax to note for compatibility
+          duree: exam.duration || 60, // Use duration field or default to 60 minutes
+          salle: exam.salle || 'Room TBA', // Add default room if not exists
+          results
+        };
+      });
+
+      setExams(transformedExams);
+      setNotes(notesData.data);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      setError('Failed to load data. Please try again.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  // Fetch current user
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      try {
+        const userData = await getUserAuth();
+        setCurrentUser(userData);
+      } catch (error) {
+        console.error('Error fetching current user:', error);
+      }
+    };
+
+    fetchCurrentUser();
+  }, []);
 
   const showToast = (message, type = "success") => {
     setToast(message);
@@ -118,16 +162,16 @@ export default function TeacherExams() {
   };
 
   const calculateStats = (exam) => {
-    const total = exam.results.length;
+    const total = exam.classeId?.etudiants?.length || exam.results.length;
     const graded = exam.results.filter(r => r.status === 'graded').length;
     const pending = exam.results.filter(r => r.status === 'pending').length;
     const absent = exam.results.filter(r => r.status === 'absent').length;
-    
+
     const grades = exam.results.filter(r => r.grade !== null).map(r => r.grade);
     const average = grades.length > 0 ? (grades.reduce((a, b) => a + b, 0) / grades.length).toFixed(1) : 0;
     const highest = grades.length > 0 ? Math.max(...grades) : 0;
     const lowest = grades.length > 0 ? Math.min(...grades) : 0;
-    
+
     return { total, graded, pending, absent, average, highest, lowest };
   };
 
@@ -147,11 +191,47 @@ export default function TeacherExams() {
     return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
   };
 
-  const handleGradeSubmit = () => {
-    if (gradingStudent && gradeInput) {
-      showToast(`Grade ${gradeInput} saved for ${gradingStudent.studentName}`);
+  const handleGradeSubmit = async () => {
+    if (!gradingStudent || !gradeInput || !selectedExam) return;
+
+    try {
+      const gradeValue = parseFloat(gradeInput);
+      if (isNaN(gradeValue) || gradeValue < 0 || gradeValue > selectedExam.noteMax) {
+        showToast('Invalid grade value', 'error');
+        return;
+      }
+
+      // Check if grade already exists (update) or create new
+      const existingNote = notes.find(note =>
+        note.examen === selectedExam._id && note.etudiant === gradingStudent.studentId
+      );
+
+      if (existingNote) {
+        // Update existing grade
+        await updateNoteById(existingNote._id, {
+          score: gradeValue,
+          feedback: '' // Could add feedback input later
+        });
+        showToast(`Grade updated for ${gradingStudent.studentName}`);
+      } else {
+        // Create new grade
+        await createNote({
+          score: gradeValue,
+          examen: selectedExam._id,
+          etudiant: gradingStudent.studentId,
+          feedback: ''
+        });
+        showToast(`Grade saved for ${gradingStudent.studentName}`);
+      }
+
+      // Refresh data to show updated grades
+      await fetchData();
+
       setGradingStudent(null);
       setGradeInput('');
+    } catch (error) {
+      console.error('Error saving grade:', error);
+      showToast('Failed to save grade', 'error');
     }
   };
 
@@ -188,7 +268,7 @@ export default function TeacherExams() {
             <CardHeader className="border-b bg-muted/50">
               <div className="flex justify-between items-start">
                 <div className="space-y-2">
-                  <CardTitle className="text-2xl">{selectedExam.titre}</CardTitle>
+                  <CardTitle className="text-2xl">{selectedExam.nom}</CardTitle>
                   <CardDescription className="text-base">
                     {selectedExam.description}
                   </CardDescription>
@@ -228,7 +308,7 @@ export default function TeacherExams() {
                 </div>
                 <div className="space-y-1 p-4 border rounded-lg bg-muted/50">
                   <p className="text-sm text-muted-foreground">Total Points</p>
-                  <p className="font-semibold text-xl">{selectedExam.note}</p>
+                  <p className="font-semibold text-xl">{selectedExam.noteMax}</p>
                 </div>
                 <div className="space-y-1 p-4 border rounded-lg bg-muted/50">
                   <p className="text-sm text-muted-foreground">Room</p>
@@ -313,10 +393,10 @@ export default function TeacherExams() {
                     <div className="flex items-center gap-3">
                       {result.grade !== null ? (
                         <div className="text-center">
-                          <p className={`text-3xl font-bold ${getGradeColor(result.grade, selectedExam.note)}`}>
+                          <p className={`text-3xl font-bold ${getGradeColor(result.grade, selectedExam.noteMax)}`}>
                             {result.grade}
                           </p>
-                          <p className="text-sm text-muted-foreground">/ {selectedExam.note}</p>
+                          <p className="text-sm text-muted-foreground">/ {selectedExam.noteMax}</p>
                         </div>
                       ) : (
                         <span className="text-muted-foreground text-sm">Not graded</span>
@@ -359,12 +439,12 @@ export default function TeacherExams() {
                 <CardContent className="space-y-4">
                   <div>
                     <label className="text-sm font-medium mb-2 block">
-                      Grade (out of {selectedExam.note})
+                      Grade (out of {selectedExam.noteMax})
                     </label>
                     <input
                       type="number"
                       min="0"
-                      max={selectedExam.note}
+                      max={selectedExam.noteMax}
                       value={gradeInput}
                       onChange={(e) => setGradeInput(e.target.value)}
                       className="w-full p-3 border rounded-md text-lg bg-background"
@@ -401,10 +481,39 @@ export default function TeacherExams() {
     );
   }
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background p-6 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading exams...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background p-6 flex items-center justify-center">
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-6 text-center">
+            <XCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold mb-2">Error Loading Data</h3>
+            <p className="text-muted-foreground mb-4">{error}</p>
+            <Button onClick={fetchData}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Try Again
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background p-6">
       {toast && <Toast message={toast} onClose={() => setToast(null)} type={toastType} />}
-      
+
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="flex justify-between items-center">
           <div>
@@ -415,14 +524,20 @@ export default function TeacherExams() {
               Manage exams, quizzes, and grade student performance
             </p>
           </div>
-          <Button size="lg">
-            <FileText className="h-4 w-4 mr-2" />
-            Create Exam
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={fetchData} disabled={refreshing}>
+              <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+            <Button size="lg">
+              <FileText className="h-4 w-4 mr-2" />
+              Create Exam
+            </Button>
+          </div>
         </div>
 
         <div className="grid gap-6">
-          {mockExams.map((exam) => {
+          {exams.map((exam) => {
             const stats = calculateStats(exam);
             const examDate = new Date(exam.date);
             const isUpcoming = examDate > new Date();
@@ -434,7 +549,7 @@ export default function TeacherExams() {
                   <div className="flex justify-between items-start">
                     <div className="space-y-2 flex-1">
                       <div className="flex items-center gap-2">
-                        <CardTitle className="text-2xl">{exam.titre}</CardTitle>
+                        <CardTitle className="text-2xl">{exam.nom}</CardTitle>
                         {isUpcoming && (
                           <Badge className="bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-500/50">
                             Upcoming
@@ -453,6 +568,11 @@ export default function TeacherExams() {
                       </div>
                       <CardDescription className="text-base">
                         {exam.description}
+                        {exam.classeId && (
+                          <div className="mt-2 text-sm text-muted-foreground">
+                            Class: {exam.classeId.nom} {exam.classeId.annee} {exam.classeId.specialisation}
+                          </div>
+                        )}
                       </CardDescription>
                     </div>
                   </div>
@@ -478,7 +598,7 @@ export default function TeacherExams() {
                         <FileText className="h-5 w-5 text-primary" />
                         <div>
                           <p className="text-xs text-muted-foreground">Points</p>
-                          <p className="text-sm font-semibold">{exam.note}</p>
+                          <p className="text-sm font-semibold">{exam.noteMax}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 p-3 border rounded-lg bg-blue-500/10">
@@ -542,7 +662,7 @@ export default function TeacherExams() {
           })}
         </div>
 
-        {mockExams.length === 0 && (
+        {exams.length === 0 && (
           <Card className="p-12 text-center border-2 border-dashed">
             <FileText className="h-20 w-20 mx-auto text-muted-foreground mb-4" />
             <h3 className="text-xl font-semibold mb-2">No Exams Scheduled</h3>
