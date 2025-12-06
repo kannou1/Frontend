@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { DatePicker } from '@/components/ui/date-picker';
 import {
   FileText,
   Calendar,
@@ -63,7 +64,7 @@ export default function TeacherAssignments() {
   const [formData, setFormData] = useState({
     nom: '',
     description: '',
-    date: '',
+    date: null,
     noteMax: '',
     type: 'assignment'
   });
@@ -125,25 +126,35 @@ export default function TeacherAssignments() {
   }, []);
 
   const getSubmissions = (assignment) => {
+    console.log('getSubmissions for assignment:', assignment._id, assignment.nom);
+    console.log('assignment._id type:', typeof assignment._id, 'value:', assignment._id);
+    console.log('notes length:', notes.length);
     return students.map(student => {
       // Look for submission in the assignment's submissions array
-      const submission = assignment.submissions?.find(s => 
+      const submission = assignment.submissions?.find(s =>
         s.studentId?.toString() === student._id?.toString()
       );
 
       // Look for grading note (from notes collection)
-      const note = notes.find(n => 
-        n.examen?.toString() === assignment._id?.toString() && 
-        n.etudiant?.toString() === student._id?.toString()
-      );
+      const note = notes.find(n => {
+        const examenId = typeof n.examen === 'object' ? n.examen?._id?.toString() : n.examen?.toString();
+        const etudiantId = typeof n.etudiant === 'object' ? n.etudiant?._id?.toString() : n.etudiant?.toString();
+        const match = examenId === assignment._id?.toString() && etudiantId === student._id?.toString();
+        if (match) {
+          console.log('Found matching note:', n);
+          console.log('n.examen type:', typeof n.examen, 'value:', n.examen);
+          console.log('n.etudiant type:', typeof n.etudiant, 'value:', n.etudiant);
+        }
+        return match;
+      });
 
       return {
         studentId: student._id,
         studentName: `${student.nom} ${student.prenom}`,
         submittedAt: submission?.dateSubmission || null,
-        grade: note?.note || submission?.note || null,
-        status: (note?.note !== null && note?.note !== undefined) ? 'graded' : 
-                submission?.dateSubmission ? 'submitted' : 'pending',
+        grade: note?.score || submission?.note || null,
+        status: (note?.score !== null && note?.score !== undefined) ? 'graded' :
+          submission?.dateSubmission ? 'submitted' : 'pending',
         file: submission?.file || null,
         noteId: note?._id || null,
         submissionId: submission?._id || null
@@ -165,25 +176,59 @@ export default function TeacherAssignments() {
 
     setSubmitting(true);
     try {
+      // Prepare payload matching backend Note schema
       const noteData = {
+        score: grade,
         examen: selectedAssignment._id,
         etudiant: gradingStudent.studentId,
-        note: grade,
-        feedback: feedbackInput || undefined
+        enseignant: user._id
       };
 
+      let res;
       if (gradingStudent.noteId) {
-        await updateNoteById(gradingStudent.noteId, noteData);
+        res = await updateNoteById(gradingStudent.noteId, noteData);
       } else {
-        await createNote(noteData);
+        res = await createNote(noteData);
       }
+
+      // Backend returns { message, note }
+      const savedNote = res?.data?.note || res?.data || null;
 
       showToast(`Grade ${grade} saved for ${gradingStudent.studentName}`);
       setGradingStudent(null);
       setGradeInput('');
       setFeedbackInput('');
-      
-      await fetchData();
+
+      // Update local notes state (upsert)
+      if (savedNote) {
+        const exists = notes.some(n => n._id === savedNote._id);
+        const updatedNotes = exists ? notes.map(n => n._id === savedNote._id ? savedNote : n) : [...notes, savedNote];
+        setNotes(updatedNotes);
+
+        // Recalculate assignments' graded counts and status locally
+        const updatedAssignments = assignments.map(a => {
+          const totalStudents = students.length;
+          const gradedCount = updatedNotes.filter(n => {
+            const examenId = typeof n.examen === 'object' ? n.examen?._id?.toString() : n.examen?.toString();
+            return examenId === a._id?.toString();
+          }).length;
+          let status = 'not_graded';
+          if (gradedCount > 0 && gradedCount < totalStudents) status = 'partially_graded';
+          if (gradedCount === totalStudents && totalStudents > 0) status = 'graded';
+
+          return { ...a, gradedCount, totalStudents, status };
+        });
+
+        setAssignments(updatedAssignments);
+
+        // Update selectedAssignment if open
+        if (selectedAssignment) {
+          const refreshed = updatedAssignments.find(a => a._id?.toString() === selectedAssignment._id?.toString());
+          if (refreshed) setSelectedAssignment(refreshed);
+        }
+      }
+
+      // Local updates are sufficient, no need for background sync
     } catch (error) {
       showToast('Failed to save grade: ' + error.message, 'error');
     } finally {
@@ -207,7 +252,7 @@ export default function TeacherAssignments() {
     setFormData({
       nom: '',
       description: '',
-      date: '',
+      date: null,
       noteMax: '',
       type: 'assignment'
     });
@@ -225,7 +270,7 @@ export default function TeacherAssignments() {
     setFormData({
       nom: assignment.nom,
       description: assignment.description,
-      date: assignment.date ? new Date(assignment.date).toISOString().slice(0, 16) : '',
+      date: assignment.date ? new Date(assignment.date) : null,
       noteMax: assignment.noteMax,
       type: 'assignment'
     });
@@ -354,9 +399,9 @@ export default function TeacherAssignments() {
     }
   };
 
-  const handleDownloadFile = async (examenId, submissionId, fileName) => {
+  const handleDownloadFile = async (examenId, studentId, fileName) => {
     try {
-      const response = await downloadAssignmentFile(examenId, submissionId);
+      const response = await downloadAssignmentFile(examenId, studentId);
 
       // Create a blob URL and trigger download
       const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -414,6 +459,20 @@ export default function TeacherAssignments() {
     });
   };
 
+  const getCourseName = (coursId) => {
+    if (!coursId || !courses.length) return 'N/A';
+    const courseId = typeof coursId === 'object' ? coursId._id : coursId;
+    const course = courses.find(c => c._id === courseId);
+    return course ? course.nom : 'N/A';
+  };
+
+  const getClassName = (coursId) => {
+    if (!coursId || !courses.length) return 'N/A';
+    const courseId = typeof coursId === 'object' ? coursId._id : coursId;
+    const course = courses.find(c => c._id === courseId);
+    return course?.classe?.nom || 'N/A';
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -450,7 +509,13 @@ export default function TeacherAssignments() {
             <CardHeader className="border-b bg-muted/50">
               <div className="flex justify-between items-start">
                 <div className="space-y-2">
-                  <CardTitle className="text-2xl">{selectedAssignment.nom}</CardTitle>
+                  <CardTitle className="text-2xl">
+                    <span className="font-semibold text-primary">{getClassName(selectedAssignment.coursId)}</span>
+                    <span className="text-muted-foreground mx-2">•</span>
+                    <span className="font-medium">{getCourseName(selectedAssignment.coursId)}</span>
+                    <span className="text-muted-foreground mx-2">•</span>
+                    <span>{selectedAssignment.nom}</span>
+                  </CardTitle>
                   <CardDescription className="text-base">
                     {selectedAssignment.description}
                   </CardDescription>
@@ -560,7 +625,7 @@ export default function TeacherAssignments() {
                         {submission.status}
                       </Badge>
                       {submission.file && (
-                        <Button variant="outline" size="sm" onClick={() => handleDownloadFile(selectedAssignment._id, submission.submissionId, submission.file)}>
+                        <Button variant="outline" size="sm" onClick={() => handleDownloadFile(selectedAssignment._id, submission.studentId, submission.file)}>
                           <Download className="h-4 w-4 mr-1" />
                           File
                         </Button>
@@ -592,11 +657,11 @@ export default function TeacherAssignments() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div>
-                    <label className="text-sm font-medium mb-2 block">Grade (out of {selectedAssignment.note})</label>
+                    <label className="text-sm font-medium mb-2 block">Grade (out of {selectedAssignment.noteMax})</label>
                     <input
                       type="number"
                       min="0"
-                      max={selectedAssignment.note}
+                      max={selectedAssignment.noteMax}
                       value={gradeInput}
                       onChange={(e) => setGradeInput(e.target.value)}
                       className="w-full p-2 border rounded-md bg-background"
@@ -772,7 +837,13 @@ export default function TeacherAssignments() {
                   <div className="flex justify-between items-start">
                     <div className="space-y-2 flex-1">
                       <div className="flex items-center gap-2">
-                        <CardTitle className="text-2xl">{assignment.nom}</CardTitle>
+                        <CardTitle className="text-2xl">
+                          <span className="font-semibold text-primary">{getClassName(assignment.coursId)}</span>
+                          <span className="text-muted-foreground mx-2">•</span>
+                          <span className="font-medium">{getCourseName(assignment.coursId)}</span>
+                          <span className="text-muted-foreground mx-2">•</span>
+                          <span>{assignment.nom}</span>
+                        </CardTitle>
                         {isOverdue && (
                           <Badge variant="destructive" className="animate-pulse">Overdue</Badge>
                         )}
@@ -785,12 +856,19 @@ export default function TeacherAssignments() {
                 </CardHeader>
                 <CardContent className="pt-6">
                   <div className="space-y-6">
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
                       <div className="flex items-center gap-2 p-3 border rounded-lg bg-muted/50">
                         <Calendar className="h-5 w-5 text-primary" />
                         <div>
                           <p className="text-xs text-muted-foreground">Due Date</p>
                           <p className="text-sm font-semibold">{new Date(assignment.date).toLocaleDateString()}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 p-3 border rounded-lg bg-muted/50">
+                        <FileText className="h-5 w-5 text-primary" />
+                        <div>
+                          <p className="text-xs text-muted-foreground">Course</p>
+                          <p className="text-sm font-semibold">{getCourseName(assignment.coursId)}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 p-3 border rounded-lg bg-muted/50">
@@ -948,14 +1026,10 @@ export default function TeacherAssignments() {
                       <label className="text-sm font-medium mb-2 block">
                         Due Date <span className="text-red-500">*</span>
                       </label>
-                      <input
-                        type="datetime-local"
-                        name="date"
-                        value={formData.date}
-                        onChange={handleFormChange}
-                        className="w-full p-2 border rounded-md bg-background"
-                        required
-                        disabled={submitting}
+                      <DatePicker
+                        date={formData.date}
+                        setDate={(date) => setFormData(prev => ({ ...prev, date }))}
+                        placeholder="Select due date"
                       />
                     </div>
                   </div>
