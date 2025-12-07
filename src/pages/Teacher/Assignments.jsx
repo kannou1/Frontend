@@ -91,14 +91,15 @@ export default function TeacherAssignments() {
         getAllCours()
       ]);
 
-      const examsData = examsRes.data;
-      const allUsers = usersRes.data;
-      const notesData = notesRes.data;
-      // getAllCours returns data directly, not wrapped in .data
-      const coursesData = Array.isArray(coursRes) ? coursRes : (coursRes.data || []);
+      // Normalize responses: some services return { data: [...] } and some return the array directly
+      const examsData = (examsRes && (examsRes.data ?? examsRes)) || [];
+      const allUsers = (usersRes && (usersRes.data ?? usersRes)) || [];
+      const notesData = (notesRes && (notesRes.data ?? notesRes)) || [];
+      // getAllCours may return array or { data: [...] }
+      const coursesData = Array.isArray(coursRes) ? coursRes : ((coursRes && (coursRes.data ?? coursRes)) || []);
 
-      // Filter for students only
-      const studentsData = allUsers.filter(user => user.role === 'etudiant');
+      // Filter for students only — guard if allUsers isn't an array
+      const studentsData = Array.isArray(allUsers) ? allUsers.filter(user => user && user.role === 'etudiant') : [];
 
       // Filter for assignment type exams
       const assignmentExams = examsData.filter(exam => exam.type === 'assignment' || exam.type === 'Assignment');
@@ -126,9 +127,6 @@ export default function TeacherAssignments() {
   }, []);
 
   const getSubmissions = (assignment) => {
-    console.log('getSubmissions for assignment:', assignment._id, assignment.nom);
-    console.log('assignment._id type:', typeof assignment._id, 'value:', assignment._id);
-    console.log('notes length:', notes.length);
     return students.map(student => {
       // Look for submission in the assignment's submissions array
       const submission = assignment.submissions?.find(s =>
@@ -339,7 +337,8 @@ export default function TeacherAssignments() {
 
     setDownloading(true);
     try {
-      const response = await downloadAllAssignmentFiles(targetAssignment._id);
+      const examenId = targetAssignment._id ?? targetAssignment.id;
+      const response = await downloadAllAssignmentFiles(examenId);
 
       // Create a blob URL and trigger download
       const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -353,8 +352,7 @@ export default function TeacherAssignments() {
 
       showToast('All files downloaded successfully');
     } catch (error) {
-      console.error('Download error:', error);
-      showToast('Failed to download files: ' + error.message, 'error');
+      showToast('Failed to download files: ' + (error?.message || 'Server error'), 'error');
     } finally {
       setDownloading(false);
     }
@@ -401,7 +399,8 @@ export default function TeacherAssignments() {
 
   const handleDownloadFile = async (examenId, studentId, fileName) => {
     try {
-      const response = await downloadAssignmentFile(examenId, studentId);
+      const id = examenId ?? (selectedAssignment?._id ?? selectedAssignment?.id);
+      const response = await downloadAssignmentFile(id, studentId);
 
       // Create a blob URL and trigger download
       const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -415,8 +414,7 @@ export default function TeacherAssignments() {
 
       showToast('File downloaded successfully');
     } catch (error) {
-      console.error('File download error:', error);
-      showToast('Failed to download file: ' + error.message, 'error');
+      showToast('Failed to download file: ' + (error?.message || 'Server error'), 'error');
     }
   };
 

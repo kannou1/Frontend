@@ -43,18 +43,17 @@ export async function deleteAllPresence() {
   return response.data;
 }
 
-// Get presence by course
-export async function getPresenceByCours(courseId) {
-  const response = await axios.get(`${API_URL}/getByCours/${courseId}`, {
+export async function getPresenceBySeance(seanceId) {
+  const response = await axios.get(`${API_URL}/getBySeance/${seanceId}`, {
     withCredentials: true,
   });
   return response.data;
 }
 
-// Get attendance rate by course
-export async function getTauxPresenceParCours(courseId) {
-  const response = await axios.get(`${API_URL}/taux/cours/${courseId}`, {
+export async function getTauxPresenceParSeance(seanceId) {
+  const response = await axios.get(`${API_URL}/taux/seance/${seanceId}`, {
     withCredentials: true,
   });
   return response.data;
 }
+
