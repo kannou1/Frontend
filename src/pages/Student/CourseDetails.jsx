@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef, useContext } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getCoursById } from "../../services/coursService";
 import { getMaterialsByCourse } from "../../services/courseMaterialService";
-import { submitAssignment } from "../../services/examenService"; // ✅ Only import submitAssignment
+import { submitAssignment } from "../../services/examenService";
 import { getNoteByExamenAndEtudiant } from "../../services/noteService";
 import { AuthContext } from "../../contexts/AuthContext";
 import { Card, CardContent } from "@/components/ui/card";
@@ -47,7 +47,7 @@ const StudentCourseDetails = ({ token }) => {
     assignments: true,
     exams: true,
   });
-  const [notesMap, setNotesMap] = useState({}); // examenId -> note object for current student
+  const [notesMap, setNotesMap] = useState({});
   const [debugNotesVisible, setDebugNotesVisible] = useState(false);
   const [activeTab, setActiveTab] = useState("chapters");
   const [toast, setToast] = useState(null);
@@ -63,7 +63,7 @@ const StudentCourseDetails = ({ token }) => {
     setTimeout(() => setToast(null), 5000);
   };
 
-  // ✅ Fetch course and materials - USE BACKEND DATA DIRECTLY
+  // ✅ Fetch course and materials
   const fetchCourseAndMaterials = async () => {
     if (!id) {
       showToastMessage("Invalid course ID");
@@ -81,6 +81,7 @@ const StudentCourseDetails = ({ token }) => {
 
       console.log("📦 Raw course data from backend:", data);
       console.log("📦 Examens field:", data.examens);
+      console.log("🆔 Current userId:", userId);
 
       const instructorName =
         data.enseignant?.prenom && data.enseignant?.nom
@@ -89,16 +90,13 @@ const StudentCourseDetails = ({ token }) => {
 
       const courseName = data.title || data.nom || "Untitled Course";
 
-      // ✅ Get exams directly from the course data (backend already populated them)
       const allExams = data.examens || data.exams || [];
       
       console.log("📝 All exams from backend:", allExams);
-      console.log("📝 Number of exams:", allExams.length);
 
-      // ✅ Separate by type field
+      // Separate by type field
       const assignments = allExams.filter(item => {
         const itemType = (item.type || "").toLowerCase();
-        console.log(`Checking item: ${item.nom || item.title}, type: "${item.type}" -> normalized: "${itemType}"`);
         return itemType === "assignment";
       });
       
@@ -107,8 +105,19 @@ const StudentCourseDetails = ({ token }) => {
         return itemType !== "assignment";
       });
 
-      console.log("✅ Filtered assignments:", assignments.length, assignments.map(a => a.nom || a.title));
-      console.log("✅ Filtered exams:", exams.length, exams.map(e => e.nom || e.title));
+      console.log("✅ Filtered assignments:", assignments);
+      console.log("✅ Filtered exams:", exams);
+
+      // Log submissions for each assignment
+      assignments.forEach(a => {
+        console.log(`📋 Assignment "${a.nom || a.title}" submissions:`, a.submissions);
+        if (a.submissions) {
+          a.submissions.forEach(sub => {
+            const subUserId = typeof sub.etudiant === 'object' ? sub.etudiant?._id : sub.etudiant;
+            console.log(`   - Submission by: ${subUserId}, isCurrentUser: ${subUserId === userId || String(subUserId) === String(userId)}`);
+          });
+        }
+      });
 
       setCourse({
         ...data,
@@ -131,7 +140,8 @@ const StudentCourseDetails = ({ token }) => {
           }),
         500
       );
-      // fetch per-exam note for current student
+
+      // Fetch per-exam notes for current student
       try {
         const examList = allExams;
         const promises = examList.map(ex => {
@@ -147,27 +157,30 @@ const StudentCourseDetails = ({ token }) => {
         const map = {};
         results.forEach((n, idx) => {
           const ex = examList[idx];
-          console.debug("per-exam note fetch", { examId: ex?._id, result: n });
           if (n && (n.score !== undefined || n.note !== undefined)) {
             if (ex && ex._id) map[ex._id] = n;
           }
         });
-        console.debug("notesMap built", map);
+        console.log("📊 notesMap built:", map);
         setNotesMap(map);
       } catch (e) {
         console.warn("Could not fetch per-exam notes:", e);
       }
+      return data;
     } catch (err) {
       console.error("❌ Error fetching course:", err);
       showToastMessage(err.message || "Failed to load course");
+      return null;
     } finally {
       setLoadingCourse(false);
     }
   };
 
   useEffect(() => {
-    fetchCourseAndMaterials();
-  }, [id, token]);
+    if (userId) {
+      fetchCourseAndMaterials();
+    }
+  }, [id, token, userId]);
 
   // Handle file selection
   const handleFileSelect = (e, assignmentId) => {
@@ -211,9 +224,9 @@ const StudentCourseDetails = ({ token }) => {
 
       const response = await submitAssignment(assignmentId, file);
 
-      showToastMessage("Assignment submitted successfully!", "success");
+      console.log("✅ Submission response:", response);
 
-      console.log("✅ Submission successful:", response.data);
+      showToastMessage("Assignment submitted successfully!", "success");
 
       // Clear selected file
       setSelectedFileMap(prev => {
@@ -222,13 +235,24 @@ const StudentCourseDetails = ({ token }) => {
         return copy;
       });
 
-      // Refresh course data
-      await fetchCourseAndMaterials();
+      // ✅ CRITICAL: Wait a moment for backend to process, then refresh
+      setTimeout(async () => {
+        await fetchCourseAndMaterials();
+      }, 1000);
 
     } catch (error) {
       console.error("❌ Error submitting assignment:", error);
       const errorMessage = error.response?.data?.message || error.message || "Failed to submit assignment";
       showToastMessage(errorMessage);
+
+      // If already submitted, refresh to show existing submission
+      const msg = (error.response?.data?.message || "").toLowerCase();
+      if (msg.includes("déjà soumis") || msg.includes("already submitted") || error.response?.status === 400) {
+        console.log('🔄 Detected already-submitted response, refreshing...');
+        setTimeout(async () => {
+          await fetchCourseAndMaterials();
+        }, 500);
+      }
     } finally {
       setSubmittingAssignment(null);
     }
@@ -236,24 +260,39 @@ const StudentCourseDetails = ({ token }) => {
 
   // Get submission status
   const getSubmissionStatus = (assignment) => {
-    if (assignment.submissions && Array.isArray(assignment.submissions)) {
+    console.log(`🔍 Checking submission for: ${assignment.nom || assignment.title}`);
+    console.log(`   Assignment ID: ${assignment._id}`);
+    console.log(`   Submissions array:`, assignment.submissions);
+    console.log(`   Current userId: ${userId}`);
+
+    if (assignment.submissions && Array.isArray(assignment.submissions) && assignment.submissions.length > 0) {
       const userSubmission = assignment.submissions.find(sub => {
         const subUserId = typeof sub.etudiant === 'object'
           ? sub.etudiant?._id
           : sub.etudiant;
-        return subUserId === userId;
+        
+        const match = String(subUserId) === String(userId);
+        console.log(`   Comparing: ${subUserId} === ${userId} ? ${match}`);
+        return match;
       });
 
       if (userSubmission) {
+        console.log(`✅ Found submission:`, userSubmission);
         return {
           submitted: true,
           data: userSubmission
         };
+      } else {
+        console.log(`❌ No matching submission found in array of ${assignment.submissions.length}`);
       }
+    } else {
+      console.log(`⚠️ No submissions array or empty array`);
     }
-    // fallback: check pre-fetched notes for this assignment
+
+    // Fallback: check pre-fetched notes
     const note = notesMap[assignment._id || assignment.id];
     if (note && (note.score !== undefined || note.note !== undefined)) {
+      console.log(`✅ Found note in notesMap:`, note);
       return {
         submitted: true,
         data: {
@@ -264,6 +303,7 @@ const StudentCourseDetails = ({ token }) => {
       };
     }
 
+    console.log(`❌ No submission found for this assignment`);
     return { submitted: false, data: null };
   };
 
@@ -623,12 +663,12 @@ const StudentCourseDetails = ({ token }) => {
                     minute: "2-digit",
                   }) || "TBA";
 
-                  // prefer embedded note, then fallback to pre-fetched note for this examen
+                  // Prefer embedded note, then fallback to pre-fetched note
                   let studentGrade = e.notes?.find(note => {
                     const noteUserId = typeof note.etudiant === 'object'
                       ? note.etudiant?._id
                       : note.etudiant;
-                    return noteUserId === userId;
+                    return String(noteUserId) === String(userId);
                   });
 
                   if (!studentGrade) {
@@ -710,10 +750,23 @@ const StudentCourseDetails = ({ token }) => {
       </div>
       {debugNotesVisible && (
         <div className="container mx-auto p-4">
-          <h3 className="font-semibold mb-2">Debug: notesMap</h3>
+          <h3 className="font-semibold mb-2">Debug Info</h3>
+          <div className="text-xs bg-black/5 p-3 rounded mb-3">
+            <p><strong>Current userId:</strong> {userId}</p>
+            <p><strong>Token:</strong> {token?.substring(0, 20)}...</p>
+          </div>
+          <h3 className="font-semibold mb-2">notesMap</h3>
           <pre className="text-xs bg-black/5 p-3 rounded overflow-auto max-h-48">{JSON.stringify(notesMap, null, 2)}</pre>
-          <h3 className="font-semibold mt-3 mb-2">Exam notes shapes</h3>
-          <pre className="text-xs bg-black/5 p-3 rounded overflow-auto max-h-48">{JSON.stringify(course?.exams?.map(e => ({ _id: e._id, notes: e.notes })), null, 2)}</pre>
+          <h3 className="font-semibold mt-3 mb-2">Assignment submissions</h3>
+          <pre className="text-xs bg-black/5 p-3 rounded overflow-auto max-h-48">{JSON.stringify(course?.assignments?.map(a => ({ 
+            id: a._id, 
+            name: a.nom, 
+            submissions: a.submissions?.map(s => ({
+              etudiant: typeof s.etudiant === 'object' ? s.etudiant?._id : s.etudiant,
+              note: s.note,
+              date: s.dateSubmission
+            }))
+          })), null, 2)}</pre>
         </div>
       )}
     </div>

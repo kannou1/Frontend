@@ -1,79 +1,149 @@
-import React from "react";
+import React, { useEffect, useState, useContext } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { CheckCircle2, XCircle, Clock, TrendingUp, Calendar } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, TrendingUp, Calendar, Loader2, AlertCircle } from "lucide-react";
+import { getPresenceByEtudiant } from "../../services/presenceService";
+import { AuthContext } from "../../contexts/AuthContext";
 
-const TeacherAttendance = () => {
-  const courses = [
-    {
-      id: 1,
-      name: "Advanced JavaScript",
-      code: "CS301",
-      present: 28,
-      absent: 2,
-      total: 30,
-      percentage: 93,
-      color: "from-primary to-primary-light"
-    },
-    {
-      id: 2,
-      name: "Web Development",
-      code: "CS101",
-      present: 24,
-      absent: 1,
-      total: 25,
-      percentage: 96,
-      color: "from-primary to-secondary"
-    },
-    {
-      id: 3,
-      name: "Network Security",
-      code: "SEC201",
-      present: 26,
-      absent: 4,
-      total: 30,
-      percentage: 87,
-      color: "from-secondary to-accent"
-    },
-    {
-      id: 4,
-      name: "Machine Learning",
-      code: "DS301",
-      present: 22,
-      absent: 3,
-      total: 25,
-      percentage: 88,
-      color: "from-accent to-secondary"
-    },
-    {
-      id: 5,
-      name: "Cryptography",
-      code: "SEC202",
-      present: 27,
-      absent: 1,
-      total: 28,
-      percentage: 96,
-      color: "from-secondary to-primary"
-    },
-  ];
+const StudentAttendance = () => {
+  const { user } = useContext(AuthContext);
+  const [attendanceData, setAttendanceData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const recentAttendance = [
-    { date: "2025-10-28", course: "Advanced JavaScript", status: "Present", code: "CS301" },
-    { date: "2025-10-27", course: "Web Development", status: "Present", code: "CS101" },
-    { date: "2025-10-26", course: "Network Security", status: "Absent", code: "SEC201" },
-    { date: "2025-10-25", course: "Machine Learning", status: "Present", code: "DS301" },
-    { date: "2025-10-24", course: "Cryptography", status: "Present", code: "SEC202" },
-  ];
+  useEffect(() => {
+    if (user?._id) {
+      fetchAttendanceData();
+    }
+  }, [user]);
 
-  const overallPercentage = Math.round(
-    (courses.reduce((acc, c) => acc + c.present, 0) / 
-     courses.reduce((acc, c) => acc + c.total, 0)) * 100
-  );
+  const fetchAttendanceData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
-  const totalPresent = courses.reduce((acc, c) => acc + c.present, 0);
-  const totalAbsent = courses.reduce((acc, c) => acc + c.absent, 0);
-  const totalClasses = courses.reduce((acc, c) => acc + c.total, 0);
+      // Fetch all attendance records for the student
+      const presences = await getPresenceByEtudiant(user._id);
+
+      // Group attendance by course
+      const courseStats = {};
+      const recentRecords = [];
+
+      presences.forEach(presence => {
+        const courseId = presence.seance?.cours?._id;
+        const courseName = presence.seance?.cours?.nom || "Unknown Course";
+        const courseCode = presence.seance?.cours?.code || "N/A";
+
+        if (!courseStats[courseId]) {
+          courseStats[courseId] = {
+            id: courseId,
+            name: courseName,
+            code: courseCode,
+            present: 0,
+            absent: 0,
+            total: 0,
+            records: []
+          };
+        }
+
+        courseStats[courseId].total += 1;
+        if (presence.statut === "présent") {
+          courseStats[courseId].present += 1;
+        } else {
+          courseStats[courseId].absent += 1;
+        }
+
+        // Add to recent records
+        recentRecords.push({
+          date: presence.date,
+          course: courseName,
+          status: presence.statut === "présent" ? "Present" : "Absent",
+          code: courseCode,
+          courseId: courseId
+        });
+      });
+
+      // Calculate percentages and prepare course data
+      const courses = Object.values(courseStats).map(course => ({
+        ...course,
+        percentage: course.total > 0 ? Math.round((course.present / course.total) * 100) : 0,
+        color: getCourseColor(course.id)
+      }));
+
+      // Sort recent records by date (most recent first)
+      recentRecords.sort((a, b) => new Date(b.date) - new Date(a.date));
+      const recentAttendance = recentRecords.slice(0, 5);
+
+      // Calculate overall stats
+      const totalPresent = courses.reduce((acc, c) => acc + c.present, 0);
+      const totalAbsent = courses.reduce((acc, c) => acc + c.absent, 0);
+      const totalClasses = courses.reduce((acc, c) => acc + c.total, 0);
+      const overallPercentage = totalClasses > 0 ? Math.round((totalPresent / totalClasses) * 100) : 0;
+
+      setAttendanceData({
+        courses,
+        recentAttendance,
+        overallPercentage,
+        totalPresent,
+        totalAbsent,
+        totalClasses
+      });
+
+    } catch (err) {
+      console.error("Error fetching attendance data:", err);
+      setError(err.message || "Failed to load attendance data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getCourseColor = (courseId) => {
+    const colors = [
+      "from-primary to-primary-light",
+      "from-primary to-secondary",
+      "from-secondary to-accent",
+      "from-accent to-secondary",
+      "from-secondary to-primary"
+    ];
+    // Use courseId to consistently assign colors
+    const index = courseId ? courseId.charCodeAt(0) % colors.length : 0;
+    return colors[index];
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className="p-8 text-center m-8">
+        <AlertCircle className="h-12 w-12 mx-auto text-destructive mb-4" />
+        <p className="text-destructive">{error}</p>
+        <button
+          onClick={fetchAttendanceData}
+          className="mt-4 px-4 py-2 bg-primary text-white rounded hover:bg-primary/90"
+        >
+          Try Again
+        </button>
+      </Card>
+    );
+  }
+
+  if (!attendanceData) {
+    return (
+      <Card className="p-8 text-center m-8">
+        <AlertCircle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+        <p className="text-muted-foreground">No attendance data available.</p>
+      </Card>
+    );
+  }
+
+  const { courses, recentAttendance, overallPercentage, totalPresent, totalAbsent, totalClasses } = attendanceData;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
@@ -219,4 +289,4 @@ const TeacherAttendance = () => {
   );
 };
 
-export default TeacherAttendance;
+export default StudentAttendance;
