@@ -1,24 +1,23 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Calendar, Clock, CheckCircle, XCircle, Users, Loader2, RefreshCw, AlertCircle } from 'lucide-react';
-import { getAllCours } from '@/services/coursService';
 import { getAllSeances } from '@/services/seanceService';
-import { getAllUsers, getUserAuth, getEtudiants } from '@/services/userService';
+import { getEtudiants } from '@/services/userService';
 import { createPresence, getPresenceBySeance, getTauxPresenceParSeance } from '@/services/presenceService';
+import { AuthContext } from '../../contexts/AuthContext';
 
 export default function TeacherAttendance() {
-  const [selectedCourse, setSelectedCourse] = useState('');
+  const { user: currentUser } = useContext(AuthContext);
   const [selectedSeance, setSelectedSeance] = useState('');
+  const [selectedSeanceData, setSelectedSeanceData] = useState(null);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [courses, setCourses] = useState([]);
   const [seances, setSeances] = useState([]);
-  const [students, setStudents] = useState([]);
+  const [allStudents, setAllStudents] = useState([]);
+  const [classStudents, setClassStudents] = useState([]);
   const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [attendanceStats, setAttendanceStats] = useState({
     total: 0,
@@ -26,11 +25,15 @@ export default function TeacherAttendance() {
     absent: 0,
     late: 0
   });
+  const [overallStats, setOverallStats] = useState({
+    totalSeances: 0,
+    totalStudents: 0,
+    averageAttendance: 0
+  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
-  const [currentUser, setCurrentUser] = useState(null);
-  const [courseStats, setCourseStats] = useState(null);
+  const [seanceStats, setSeanceStats] = useState(null);
   const [recentAttendanceRecords, setRecentAttendanceRecords] = useState([]);
 
   // Toast state
@@ -45,37 +48,54 @@ export default function TeacherAttendance() {
 
   // Fetch initial data
   useEffect(() => {
-    fetchInitialData();
-  }, []);
+    if (currentUser) {
+      fetchInitialData();
+    }
+  }, [currentUser]);
 
   const fetchInitialData = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // Fetch current user, courses, seances, and students
-      const [userData, coursesData, seancesData, studentsData] = await Promise.all([
-        getUserAuth(),
-        getAllCours(),
+      if (!currentUser) {
+        setError('Please log in to view attendance');
+        setLoading(false);
+        return;
+      }
+
+      console.log('Fetching initial data for teacher:', currentUser._id);
+
+      // Fetch seances and all students
+      const [seancesData, studentsData] = await Promise.all([
         getAllSeances(),
         getEtudiants()
       ]);
 
-      setCurrentUser(userData);
-
-      // Filter courses taught by current teacher
-      const teacherCourses = coursesData.filter(course =>
-        course.enseignant?._id === userData._id || course.enseignant === userData._id
-      );
-      setCourses(teacherCourses);
+      console.log('Seances data:', seancesData);
+      console.log('Students data:', studentsData);
 
       // Filter seances taught by current teacher
-      const teacherSeances = seancesData.filter(seance =>
-        seance.enseignant?._id === userData._id || seance.enseignant === userData._id
-      );
+      // TEMPORARY FIX: If seance has no enseignant, check if teacher teaches the course
+      const teacherSeances = seancesData.filter(seance => {
+        // Check if seance has enseignant field
+        const enseignantId = seance.enseignant?._id || seance.enseignant;
+        if (enseignantId) {
+          return enseignantId === currentUser._id;
+        }
+        
+        // FALLBACK: Check if teacher teaches the course (for old data)
+        const coursEnseignantId = seance.cours?.enseignant?._id || seance.cours?.enseignant;
+        if (coursEnseignantId) {
+          return coursEnseignantId === currentUser._id;
+        }
+        
+        // If admin or no filter available, show all seances
+        return currentUser.role === 'admin';
+      });
+
+      console.log('Teacher seances:', teacherSeances);
       setSeances(teacherSeances);
-
-
 
       // Filter students - handle different response formats
       let studentUsers = [];
@@ -84,59 +104,141 @@ export default function TeacherAttendance() {
       } else if (studentsData && Array.isArray(studentsData.data)) {
         studentUsers = studentsData.data.filter(user => user.role === 'etudiant');
       } else if (studentsData && typeof studentsData === 'object') {
-        // If it's a single object, wrap it in an array
         const studentsArray = Array.isArray(studentsData) ? studentsData : [studentsData];
         studentUsers = studentsArray.filter(user => user.role === 'etudiant');
       }
-      setStudents(studentUsers);
+
+      console.log('All students:', studentUsers);
+      setAllStudents(studentUsers);
+
+      // Calculate overall stats for all teacher's seances
+      if (teacherSeances.length > 0) {
+        await calculateOverallStats(teacherSeances);
+      }
 
       // Set default seance if available
       if (teacherSeances.length > 0) {
         setSelectedSeance(teacherSeances[0]._id);
-        await loadSeanceData(teacherSeances[0]._id);
+        setSelectedSeanceData(teacherSeances[0]);
       }
 
     } catch (error) {
       console.error('Error fetching initial data:', error);
-      setError('Failed to load data. Please try again.');
-      showToast('Failed to load data', 'error');
+      if (error.response?.status === 401) {
+        setError('Your session has expired. Please log in again.');
+        showToast('Session expired', 'error');
+      } else {
+        setError('Failed to load data. Please try again.');
+        showToast('Failed to load data', 'error');
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  // Filter students by seance's class
+  useEffect(() => {
+    if (selectedSeanceData && allStudents.length > 0) {
+      const classeId = selectedSeanceData.classe?._id || selectedSeanceData.classe;
+      console.log('Filtering students for classe:', classeId);
+      
+      const studentsInClass = allStudents.filter(student => {
+        const studentClasseId = student.classe?._id || student.classe;
+        return studentClasseId === classeId;
+      });
+
+      console.log('Students in class:', studentsInClass);
+      setClassStudents(studentsInClass);
+
+      // Update total count in stats
+      setAttendanceStats(prev => ({
+        ...prev,
+        total: studentsInClass.length
+      }));
+    } else {
+      setClassStudents([]);
+    }
+  }, [selectedSeanceData, allStudents]);
+
+  // Calculate overall statistics for all teacher's seances
+  const calculateOverallStats = async (teacherSeances) => {
+    try {
+      let totalPresences = 0;
+      let totalRecords = 0;
+      const uniqueClasses = new Set();
+
+      for (const seance of teacherSeances) {
+        uniqueClasses.add(seance.classe?._id || seance.classe);
+        
+        try {
+          const attendanceData = await getPresenceBySeance(seance._id);
+          totalRecords += attendanceData.length;
+          totalPresences += attendanceData.filter(r => r.statut === 'présent').length;
+        } catch (error) {
+          console.warn(`Could not fetch attendance for seance ${seance._id}`);
+        }
+      }
+
+      const averageAttendance = totalRecords > 0 
+        ? Math.round((totalPresences / totalRecords) * 100) 
+        : 0;
+
+      setOverallStats({
+        totalSeances: teacherSeances.length,
+        totalClasses: uniqueClasses.size,
+        averageAttendance
+      });
+    } catch (error) {
+      console.error('Error calculating overall stats:', error);
+    }
+  };
+
   const loadSeanceData = async (seanceId) => {
     try {
-      // Fetch existing attendance records for this seance and date
+      setLoading(true);
+      
+      // Fetch existing attendance records for this seance
       const attendanceData = await getPresenceBySeance(seanceId);
+      console.log('Attendance data for seance:', attendanceData);
 
       // Filter records for selected date
-      const todaysRecords = attendanceData.filter(record =>
-        new Date(record.date).toISOString().split('T')[0] === selectedDate
-      );
+      const todaysRecords = attendanceData.filter(record => {
+        const recordDate = new Date(record.date).toISOString().split('T')[0];
+        return recordDate === selectedDate;
+      });
 
-      setAttendanceRecords(todaysRecords);
+      console.log('Today\'s records:', todaysRecords);
 
-      // Calculate stats
-      const seanceStudents = students.filter(student =>
-        // Check if student is enrolled in this seance
-        true // For now, assume all students are in all seances
-      );
+      // Create a map of student attendance for easy lookup
+      const attendanceMap = {};
+      todaysRecords.forEach(record => {
+        const studentId = record.etudiant?._id || record.etudiant;
+        attendanceMap[studentId] = {
+          _id: record._id,
+          statut: record.statut,
+          etudiant: studentId
+        };
+      });
 
+      // Convert map to array for state
+      setAttendanceRecords(Object.values(attendanceMap));
+
+      // Calculate stats based on class students
       const stats = {
-        total: seanceStudents.length,
-        present: todaysRecords.filter(r => r.statut === 'présent').length,
-        absent: todaysRecords.filter(r => r.statut === 'absent').length,
-        late: todaysRecords.filter(r => r.statut === 'retard').length
+        total: classStudents.length,
+        present: Object.values(attendanceMap).filter(r => r.statut === 'présent').length,
+        absent: Object.values(attendanceMap).filter(r => r.statut === 'absent').length,
+        late: Object.values(attendanceMap).filter(r => r.statut === 'retard').length
       };
       setAttendanceStats(stats);
 
       // Fetch seance attendance statistics
       try {
         const statsData = await getTauxPresenceParSeance(seanceId);
-        setCourseStats(statsData);
+        setSeanceStats(statsData);
       } catch (statsError) {
         console.warn('Could not fetch seance stats:', statsError);
+        setSeanceStats(null);
       }
 
       // Load recent attendance records for this seance
@@ -145,13 +247,14 @@ export default function TeacherAttendance() {
     } catch (error) {
       console.error('Error loading seance data:', error);
       showToast('Failed to load seance attendance data', 'error');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const loadRecentAttendanceRecords = async (courseId) => {
+  const loadRecentAttendanceRecords = async (seanceId) => {
     try {
-      // Fetch all attendance records for this course
-      const allRecords = await getPresenceByCours(courseId);
+      const allRecords = await getPresenceBySeance(seanceId);
 
       // Group by date and calculate attendance stats
       const recordsByDate = {};
@@ -175,34 +278,46 @@ export default function TeacherAttendance() {
       // Convert to array and sort by date (most recent first)
       const recentRecords = Object.values(recordsByDate)
         .sort((a, b) => new Date(b.date) - new Date(a.date))
-        .slice(0, 5); // Show last 5 days
+        .slice(0, 5);
 
       setRecentAttendanceRecords(recentRecords);
 
     } catch (error) {
       console.error('Error loading recent attendance records:', error);
-      // Don't show error toast for this, just use empty array
       setRecentAttendanceRecords([]);
     }
   };
 
   // Load seance data when seance or date changes
   useEffect(() => {
-    if (selectedSeance && students.length > 0) {
+    if (selectedSeance && classStudents.length > 0) {
       loadSeanceData(selectedSeance);
     }
-  }, [selectedSeance, selectedDate, students]);
+  }, [selectedSeance, selectedDate, classStudents]);
+
+  // Handle seance selection change
+  const handleSeanceChange = (seanceId) => {
+    setSelectedSeance(seanceId);
+    const seance = seances.find(s => s._id === seanceId);
+    setSelectedSeanceData(seance);
+    console.log('Selected seance:', seance);
+  };
 
   const handleStatusChange = (studentId, status) => {
     setAttendanceRecords(prev => {
-      const existing = prev.find(r => r.etudiant === studentId);
+      const existing = prev.find(r => {
+        const recordStudentId = r.etudiant?._id || r.etudiant;
+        return recordStudentId === studentId;
+      });
+      
       if (existing) {
         // Update existing record
-        return prev.map(r =>
-          r.etudiant === studentId
+        return prev.map(r => {
+          const recordStudentId = r.etudiant?._id || r.etudiant;
+          return recordStudentId === studentId
             ? { ...r, statut: status }
-            : r
-        );
+            : r;
+        });
       } else {
         // Add new record
         const newRecord = {
@@ -210,24 +325,58 @@ export default function TeacherAttendance() {
           statut: status,
           seance: selectedSeance,
           date: selectedDate,
-          enseignant: currentUser?._id
+          enseignant: currentUser._id
         };
         return [...prev, newRecord];
       }
     });
+
+    // Update stats immediately for better UX
+    setAttendanceStats(prev => {
+      const current = getStudentAttendanceStatus(studentId);
+      const newStats = { ...prev };
+      
+      // Remove from old status
+      if (current === 'présent') newStats.present--;
+      else if (current === 'absent') newStats.absent--;
+      else if (current === 'retard') newStats.late--;
+      
+      // Add to new status
+      if (status === 'présent') newStats.present++;
+      else if (status === 'absent') newStats.absent++;
+      else if (status === 'retard') newStats.late++;
+      
+      return newStats;
+    });
   };
 
   const handleSaveAttendance = async () => {
-    if (!selectedSeance || attendanceRecords.length === 0) {
-      showToast('No attendance data to save', 'error');
+    if (!selectedSeance) {
+      showToast('Please select a seance first', 'error');
+      return;
+    }
+
+    if (attendanceRecords.length === 0) {
+      showToast('Please mark attendance for at least one student', 'error');
       return;
     }
 
     try {
       setSaving(true);
 
-      // Save each attendance record
-      const savePromises = attendanceRecords.map(async (record) => {
+      // Filter only new records (without _id) to create
+      const newRecords = attendanceRecords.filter(record => !record._id);
+
+      if (newRecords.length === 0) {
+        showToast('All attendance already saved', 'info');
+        setSaving(false);
+        return;
+      }
+
+      console.log('Saving new records:', newRecords);
+
+      // Save each NEW attendance record
+      const savePromises = newRecords.map(async (record) => {
         const attendanceData = {
           date: selectedDate,
           statut: record.statut,
@@ -236,31 +385,31 @@ export default function TeacherAttendance() {
           enseignant: currentUser._id
         };
 
-        // Check if record already exists in database
-        if (record._id) {
-          // Update existing record (if we had an update API)
-          return record;
-        } else {
-          // Create new record
-          return await createPresence(attendanceData);
-        }
+        console.log('Creating presence:', attendanceData);
+        return await createPresence(attendanceData);
       });
 
       await Promise.all(savePromises);
 
-      showToast('Attendance saved successfully!');
-      await loadSeanceData(selectedSeance); // Refresh data
+      showToast(`Successfully saved attendance for ${newRecords.length} student(s)!`);
+      
+      // Refresh data
+      await loadSeanceData(selectedSeance);
 
     } catch (error) {
       console.error('Error saving attendance:', error);
-      showToast('Failed to save attendance', 'error');
+      const errorMessage = error.response?.data?.message || error.message || 'Unknown error';
+      showToast(`Failed to save attendance: ${errorMessage}`, 'error');
     } finally {
       setSaving(false);
     }
   };
 
   const getStudentAttendanceStatus = (studentId) => {
-    const record = attendanceRecords.find(r => r.etudiant === studentId);
+    const record = attendanceRecords.find(r => {
+      const recordStudentId = r.etudiant?._id || r.etudiant;
+      return recordStudentId === studentId;
+    });
     return record?.statut || null;
   };
 
@@ -290,7 +439,15 @@ export default function TeacherAttendance() {
     });
   };
 
-  if (loading) {
+  const getSeanceDisplayName = (seance) => {
+    const courseName = seance.cours?.nom || 'Course';
+    const seanceName = seance.nom || '';
+    const seanceType = seance.typeCours || '';
+    const dayTime = `${seance.jourSemaine || ''} ${seance.heureDebut || ''}-${seance.heureFin || ''}`;
+    return `${courseName}${seanceName ? ' - ' + seanceName : ''}${seanceType ? ' (' + seanceType + ')' : ''} - ${dayTime}`;
+  };
+
+  if (loading && seances.length === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 p-6 flex items-center justify-center">
         <div className="text-center">
@@ -321,6 +478,17 @@ export default function TeacherAttendance() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 p-6">
+      {/* Toast Notification */}
+      {toast && (
+        <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg ${
+          toastType === 'success' ? 'bg-green-500' : 
+          toastType === 'error' ? 'bg-red-500' : 
+          'bg-blue-500'
+        } text-white`}>
+          {toast}
+        </div>
+      )}
+
       <div className="container mx-auto space-y-6">
         <div className="flex justify-between items-center">
           <div>
@@ -331,32 +499,98 @@ export default function TeacherAttendance() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Total Students</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                {selectedSeance ? 'Students in Class' : 'Total Seances'}
+              </CardTitle>
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{attendanceStats.total}</div>
+              <div className="text-2xl font-bold">
+                {selectedSeance ? attendanceStats.total : overallStats.totalSeances}
+              </div>
+              {selectedSeance && selectedSeanceData && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {selectedSeanceData.classe?.nom || 'Class'}
+                </p>
+              )}
+              {!selectedSeance && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Across {overallStats.totalClasses} classes
+                </p>
+              )}
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Present</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                {selectedSeance ? 'Present Today' : 'Avg. Attendance'}
+              </CardTitle>
               <CheckCircle className="h-4 w-4 text-green-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-600">{attendanceStats.present}</div>
+              <div className="text-2xl font-bold text-green-600">
+                {selectedSeance ? attendanceStats.present : `${overallStats.averageAttendance}%`}
+              </div>
+              {selectedSeance && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {attendanceStats.total > 0 
+                    ? `${Math.round((attendanceStats.present / attendanceStats.total) * 100)}%` 
+                    : '0%'}
+                </p>
+              )}
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Absent</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                {selectedSeance ? 'Absent Today' : 'Date'}
+              </CardTitle>
               <XCircle className="h-4 w-4 text-red-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-red-600">{attendanceStats.absent}</div>
+              <div className={`text-2xl font-bold ${selectedSeance ? 'text-red-600' : ''}`}>
+                {selectedSeance ? attendanceStats.absent : formatDate(selectedDate)}
+              </div>
+              {selectedSeance && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {attendanceStats.total > 0 
+                    ? `${Math.round((attendanceStats.absent / attendanceStats.total) * 100)}%` 
+                    : '0%'}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">
+                {selectedSeance ? 'Late Today' : 'Seance Stats'}
+              </CardTitle>
+              <Clock className="h-4 w-4 text-yellow-500" />
+            </CardHeader>
+            <CardContent>
+              {selectedSeance ? (
+                <>
+                  <div className="text-2xl font-bold text-yellow-600">{attendanceStats.late}</div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {attendanceStats.total > 0 
+                      ? `${Math.round((attendanceStats.late / attendanceStats.total) * 100)}%` 
+                      : '0%'}
+                  </p>
+                </>
+              ) : seanceStats ? (
+                <>
+                  <div className="text-2xl font-bold">{seanceStats.taux || '0%'}</div>
+                  <p className="text-xs text-muted-foreground mt-1">Overall rate</p>
+                </>
+              ) : (
+                <>
+                  <div className="text-2xl font-bold">--</div>
+                  <p className="text-xs text-muted-foreground mt-1">Select seance</p>
+                </>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -368,16 +602,20 @@ export default function TeacherAttendance() {
           </CardHeader>
           <CardContent>
             <div className="flex gap-4 mb-6">
-              <Select value={selectedCourse} onValueChange={setSelectedCourse}>
-                <SelectTrigger className="w-[250px]">
-                  <SelectValue placeholder="Select course" />
+              <Select value={selectedSeance} onValueChange={handleSeanceChange}>
+                <SelectTrigger className="w-[400px]">
+                  <SelectValue placeholder="Select seance" />
                 </SelectTrigger>
                 <SelectContent>
-                  {courses.map((course) => (
-                    <SelectItem key={course._id} value={course._id}>
-                      {course.nom} ({course.code})
-                    </SelectItem>
-                  ))}
+                  {seances.length === 0 ? (
+                    <div className="p-2 text-sm text-muted-foreground">No seances found</div>
+                  ) : (
+                    seances.map((seance) => (
+                      <SelectItem key={seance._id} value={seance._id}>
+                        {getSeanceDisplayName(seance)}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
               <div className="flex items-center gap-2">
@@ -391,105 +629,140 @@ export default function TeacherAttendance() {
               </div>
             </div>
 
-            <div className="space-y-3">
-              {students.map((student) => {
-                const studentStatus = getStudentAttendanceStatus(student._id);
-                return (
-                  <div key={student._id} className="flex items-center justify-between p-4 border rounded-lg">
-                    <div className="flex items-center gap-4">
-                      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white font-semibold">
-                        {(student.prenom || student.nom || 'U').charAt(0).toUpperCase()}
-                      </div>
-                      <div>
-                        <p className="font-medium">
-                          {student.prenom && student.nom ? `${student.prenom} ${student.nom}` : student.nom || student.prenom || 'Unknown Student'}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          {student.email || 'No email'}
-                        </p>
-                      </div>
-                      {studentStatus && (
-                        <Badge className={`${getStatusColor(studentStatus)} border`}>
-                          {getStatusIcon(studentStatus)}
-                          <span className="ml-1 capitalize">{studentStatus}</span>
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant={studentStatus === 'présent' ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => handleStatusChange(student._id, 'présent')}
-                      >
-                        Present
-                      </Button>
-                      <Button
-                        variant={studentStatus === 'absent' ? 'destructive' : 'outline'}
-                        size="sm"
-                        onClick={() => handleStatusChange(student._id, 'absent')}
-                      >
-                        Absent
-                      </Button>
-                      <Button
-                        variant={studentStatus === 'retard' ? 'secondary' : 'outline'}
-                        size="sm"
-                        onClick={() => handleStatusChange(student._id, 'retard')}
-                      >
-                        Late
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="flex justify-end mt-6">
-              <Button onClick={handleSaveAttendance} className="gap-2">
-                <CheckCircle className="h-4 w-4" />
-                Save Attendance
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Attendance Records</CardTitle>
-            <CardDescription>View attendance history</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {recentAttendanceRecords.length > 0 ? (
-                recentAttendanceRecords.map((record, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-                    <div className="flex items-center gap-4">
-                      <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
-                        <Calendar className="h-4 w-4 text-white" />
-                      </div>
-                      <div>
-                        <p className="font-medium">
-                          {courses.find(c => c._id === selectedCourse)?.nom || 'Course'}
-                        </p>
-                        <p className="text-sm text-muted-foreground">{formatDate(record.date)}</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-medium">{record.present}/{record.total}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {record.total > 0 ? Math.round((record.present / record.total) * 100) : 0}% attendance
-                      </p>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>No attendance records found for this course</p>
+            {!selectedSeance ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>Please select a seance to take attendance</p>
+              </div>
+            ) : classStudents.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>No students found in this class</p>
+                <p className="text-xs mt-2">Class: {selectedSeanceData?.classe?.nom || 'Unknown'}</p>
+              </div>
+            ) : (
+              <>
+                <div className="mb-4 p-3 bg-muted rounded-lg">
+                  <p className="text-sm font-medium">
+                    Class: {selectedSeanceData?.classe?.nom || 'Unknown'} ({classStudents.length} students)
+                  </p>
                 </div>
-              )}
-            </div>
+                <div className="space-y-3 max-h-[500px] overflow-y-auto">
+                  {classStudents.map((student) => {
+                    const studentStatus = getStudentAttendanceStatus(student._id);
+                    return (
+                      <div key={student._id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors">
+                        <div className="flex items-center gap-4">
+                          <div className="h-10 w-10 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white font-semibold">
+                            {(student.prenom || student.nom || 'U').charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="font-medium">
+                              {student.prenom && student.nom ? `${student.prenom} ${student.nom}` : student.nom || student.prenom || 'Unknown Student'}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              {student.email || 'No email'}
+                            </p>
+                          </div>
+                          {studentStatus && (
+                            <Badge className={`${getStatusColor(studentStatus)} border`}>
+                              {getStatusIcon(studentStatus)}
+                              <span className="ml-1 capitalize">{studentStatus}</span>
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant={studentStatus === 'présent' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => handleStatusChange(student._id, 'présent')}
+                          >
+                            Present
+                          </Button>
+                          <Button
+                            variant={studentStatus === 'absent' ? 'destructive' : 'outline'}
+                            size="sm"
+                            onClick={() => handleStatusChange(student._id, 'absent')}
+                          >
+                            Absent
+                          </Button>
+                          <Button
+                            variant={studentStatus === 'retard' ? 'secondary' : 'outline'}
+                            size="sm"
+                            onClick={() => handleStatusChange(student._id, 'retard')}
+                          >
+                            Late
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="flex justify-end mt-6">
+                  <Button 
+                    onClick={handleSaveAttendance} 
+                    className="gap-2"
+                    disabled={saving || attendanceRecords.length === 0}
+                  >
+                    {saving ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="h-4 w-4" />
+                        Save Attendance
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
+
+        {selectedSeance && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Recent Attendance Records</CardTitle>
+              <CardDescription>View attendance history for this seance</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {recentAttendanceRecords.length > 0 ? (
+                  recentAttendanceRecords.map((record, index) => (
+                    <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div className="flex items-center gap-4">
+                        <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
+                          <Calendar className="h-4 w-4 text-white" />
+                        </div>
+                        <div>
+                          <p className="font-medium">{formatDate(record.date)}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {record.present} present, {record.absent} absent, {record.late} late
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-medium">{record.present}/{record.total}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {record.total > 0 ? Math.round((record.present / record.total) * 100) : 0}% attendance
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No attendance records found for this seance</p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );
