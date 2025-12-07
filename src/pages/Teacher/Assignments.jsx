@@ -138,11 +138,6 @@ export default function TeacherAssignments() {
         const examenId = typeof n.examen === 'object' ? n.examen?._id?.toString() : n.examen?.toString();
         const etudiantId = typeof n.etudiant === 'object' ? n.etudiant?._id?.toString() : n.etudiant?.toString();
         const match = examenId === assignment._id?.toString() && etudiantId === student._id?.toString();
-        if (match) {
-          console.log('Found matching note:', n);
-          console.log('n.examen type:', typeof n.examen, 'value:', n.examen);
-          console.log('n.etudiant type:', typeof n.etudiant, 'value:', n.etudiant);
-        }
         return match;
       });
 
