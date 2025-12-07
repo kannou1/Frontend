@@ -333,7 +333,10 @@ export default function TeacherAssignments() {
 
   const handleDownloadAllFiles = async (assignment = null) => {
     const targetAssignment = assignment || selectedAssignment;
-    if (!targetAssignment) return;
+    if (!targetAssignment || !targetAssignment._id) {
+      showToast('Assignment not found', 'error');
+      return;
+    }
 
     setDownloading(true);
     try {
@@ -575,7 +578,7 @@ export default function TeacherAssignments() {
                   <CardTitle>Student Submissions</CardTitle>
                   <CardDescription>Review and grade student work</CardDescription>
                 </div>
-                <Button variant="outline" size="sm" onClick={handleDownloadAllFiles} disabled={downloading}>
+                <Button variant="outline" size="sm" onClick={() => handleDownloadAllFiles()} disabled={downloading}>
                   {downloading ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-1 animate-spin" />
