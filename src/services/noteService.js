@@ -47,3 +47,11 @@ export async function deleteNoteById(id) {
     withCredentials: true,
   });
 }
+
+//get note by examen and etudiant
+export async function getNoteByExamenAndEtudiant(examenId, etudiantId) {
+  // Backend route is /note/getByExamenEtudiant/:examenId/:etudiantId
+  return axios.get(`${API_URL}/getByExamenEtudiant/${examenId}/${etudiantId}`, {
+    withCredentials: true,
+  });
+}

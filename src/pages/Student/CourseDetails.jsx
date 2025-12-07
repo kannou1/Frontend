@@ -1,8 +1,10 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useContext } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getCoursById } from "../../services/coursService";
 import { getMaterialsByCourse } from "../../services/courseMaterialService";
 import { submitAssignment } from "../../services/examenService"; // ✅ Only import submitAssignment
+import { getNoteByExamenAndEtudiant } from "../../services/noteService";
+import { AuthContext } from "../../contexts/AuthContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -35,6 +37,8 @@ const Toast = ({ message, onClose, type = "error" }) => (
 const StudentCourseDetails = ({ token }) => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useContext(AuthContext);
+  const userId = user?._id || user?.id || (JSON.parse(localStorage.getItem('user') || '{}')._id) || (JSON.parse(localStorage.getItem('user') || '{}').id);
   
   const [course, setCourse] = useState(null);
   const [loadingCourse, setLoadingCourse] = useState(true);
@@ -43,6 +47,8 @@ const StudentCourseDetails = ({ token }) => {
     assignments: true,
     exams: true,
   });
+  const [notesMap, setNotesMap] = useState({}); // examenId -> note object for current student
+  const [debugNotesVisible, setDebugNotesVisible] = useState(false);
   const [activeTab, setActiveTab] = useState("chapters");
   const [toast, setToast] = useState(null);
   const [toastType, setToastType] = useState("error");
@@ -125,6 +131,32 @@ const StudentCourseDetails = ({ token }) => {
           }),
         500
       );
+      // fetch per-exam note for current student
+      try {
+        const examList = allExams;
+        const promises = examList.map(ex => {
+          if (!ex || !ex._id) return Promise.resolve(null);
+          return getNoteByExamenAndEtudiant(ex._id, userId)
+            .then(res => res?.data || null)
+            .catch((err) => {
+              console.debug("getNoteByExamenAndEtudiant failed", { examId: ex._id, err });
+              return null;
+            });
+        });
+        const results = await Promise.all(promises);
+        const map = {};
+        results.forEach((n, idx) => {
+          const ex = examList[idx];
+          console.debug("per-exam note fetch", { examId: ex?._id, result: n });
+          if (n && (n.score !== undefined || n.note !== undefined)) {
+            if (ex && ex._id) map[ex._id] = n;
+          }
+        });
+        console.debug("notesMap built", map);
+        setNotesMap(map);
+      } catch (e) {
+        console.warn("Could not fetch per-exam notes:", e);
+      }
     } catch (err) {
       console.error("❌ Error fetching course:", err);
       showToastMessage(err.message || "Failed to load course");
@@ -206,10 +238,10 @@ const StudentCourseDetails = ({ token }) => {
   const getSubmissionStatus = (assignment) => {
     if (assignment.submissions && Array.isArray(assignment.submissions)) {
       const userSubmission = assignment.submissions.find(sub => {
-        const subUserId = typeof sub.etudiant === 'object' 
-          ? sub.etudiant?._id 
+        const subUserId = typeof sub.etudiant === 'object'
+          ? sub.etudiant?._id
           : sub.etudiant;
-        return subUserId === token;
+        return subUserId === userId;
       });
 
       if (userSubmission) {
@@ -219,6 +251,19 @@ const StudentCourseDetails = ({ token }) => {
         };
       }
     }
+    // fallback: check pre-fetched notes for this assignment
+    const note = notesMap[assignment._id || assignment.id];
+    if (note && (note.score !== undefined || note.note !== undefined)) {
+      return {
+        submitted: true,
+        data: {
+          note: note.score ?? note.note,
+          commentaire: note.commentaire || note.feedback || null,
+          dateSubmission: note.createdAt || note.updatedAt || new Date().toISOString()
+        }
+      };
+    }
+
     return { submitted: false, data: null };
   };
 
@@ -244,6 +289,11 @@ const StudentCourseDetails = ({ token }) => {
 
   return (
     <div className="min-h-screen bg-background relative">
+      <div className="container mx-auto px-4 py-2 flex justify-end">
+        <Button size="sm" variant="ghost" onClick={() => setDebugNotesVisible(v => !v)}>
+          {debugNotesVisible ? "Hide debug" : "Show debug"}
+        </Button>
+      </div>
       {toast && (
         <Toast message={toast} onClose={() => setToast(null)} type={toastType} />
       )}
@@ -573,12 +623,18 @@ const StudentCourseDetails = ({ token }) => {
                     minute: "2-digit",
                   }) || "TBA";
 
-                  const studentGrade = e.notes?.find(note => {
+                  // prefer embedded note, then fallback to pre-fetched note for this examen
+                  let studentGrade = e.notes?.find(note => {
                     const noteUserId = typeof note.etudiant === 'object'
                       ? note.etudiant?._id
                       : note.etudiant;
-                    return noteUserId === token;
+                    return noteUserId === userId;
                   });
+
+                  if (!studentGrade) {
+                    const fetched = notesMap[e._id || e.id];
+                    if (fetched) studentGrade = fetched;
+                  }
 
                   return (
                     <Card
@@ -614,7 +670,7 @@ const StudentCourseDetails = ({ token }) => {
                           {studentGrade && (
                             <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
                               <p className="text-sm font-semibold text-green-800">
-                                Your Grade: {studentGrade.note}/{e.noteMax}
+                                Your Grade: {(studentGrade.score ?? studentGrade.note)}/{e.noteMax}
                               </p>
                               {studentGrade.commentaire && (
                                 <p className="text-sm text-green-700 mt-1">
@@ -652,6 +708,14 @@ const StudentCourseDetails = ({ token }) => {
           </TabsContent>
         </Tabs>
       </div>
+      {debugNotesVisible && (
+        <div className="container mx-auto p-4">
+          <h3 className="font-semibold mb-2">Debug: notesMap</h3>
+          <pre className="text-xs bg-black/5 p-3 rounded overflow-auto max-h-48">{JSON.stringify(notesMap, null, 2)}</pre>
+          <h3 className="font-semibold mt-3 mb-2">Exam notes shapes</h3>
+          <pre className="text-xs bg-black/5 p-3 rounded overflow-auto max-h-48">{JSON.stringify(course?.exams?.map(e => ({ _id: e._id, notes: e.notes })), null, 2)}</pre>
+        </div>
+      )}
     </div>
   );
 };
