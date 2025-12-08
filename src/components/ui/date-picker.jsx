@@ -154,14 +154,14 @@ function DatePicker({
                     variant="outline"
                     size="sm"
                     onClick={handleClear}
-                  className="flex-1"
-                  aria-label="Clear selected date"
-                >
-                  Clear
-                </Button>
-              )}
-            </div>
-          )}
+                    className="flex-1"
+                    aria-label="Clear selected date"
+                  >
+                    Clear
+                  </Button>
+                )}
+              </div>
+            )}
         </div>
       </PopoverContent>
     </Popover>

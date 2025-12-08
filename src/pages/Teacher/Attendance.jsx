@@ -286,6 +286,11 @@ export default function TeacherAttendance() {
     console.log('Selected seance:', seance);
   };
 
+  const handleDateChange = (date) => {
+    setSelectedDateObj(date);
+    setSelectedDate(date.toISOString().split('T')[0]);
+  };
+
   const handleStatusChange = (studentId, status) => {
     setAttendanceRecords(prev => {
       const existing = prev.find(r => {
@@ -602,12 +607,10 @@ export default function TeacherAttendance() {
                 </SelectContent>
               </Select>
               <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="w-[150px]"
+                <DatePicker
+                  date={selectedDateObj}
+                  setDate={handleDateChange}
+                  className="w-[200px]"
                 />
               </div>
             </div>
