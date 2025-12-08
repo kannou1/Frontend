@@ -85,7 +85,7 @@ function DatePicker({
           </Button>
         </PopoverTrigger>
 
-        <PopoverContent className="w-auto p-0" align="start">
+        <PopoverContent className="w-auto p-0 z-[60] pointer-events-auto" align="start">
           <div className="p-3">
             {/* Year and Month selectors */}
             <div className="flex gap-2 mb-3">
@@ -125,7 +125,6 @@ function DatePicker({
                 setMonth(newMonth.getMonth());
                 setYear(newMonth.getFullYear());
               }}
-              initialFocus
               fromDate={fromDate}
               toDate={toDate}
               disabled={(date) => {

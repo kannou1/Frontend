@@ -10,7 +10,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+
+// Re-added imports for DatePicker and TimePicker to restore custom design
+import { TimePicker } from "@/components/ui/time-picker";
 import { DatePicker } from "@/components/ui/date-picker";
+
 import {
   Select,
   SelectContent,
@@ -90,8 +94,8 @@ export default function AdminTimetable() {
     titre: "",
     description: "",
     classe: "",
-    dateDebut: null,
-    dateFin: null,
+    dateDebut: "",
+    dateFin: "",
   });
 
   const [seanceFormData, setSeanceFormData] = useState({
@@ -177,13 +181,8 @@ export default function AdminTimetable() {
     }
   };
 
-  const handleDateDebutChange = (date) => {
-    setEmploiFormData((prev) => ({ ...prev, dateDebut: date }));
-  };
-
-  const handleDateFinChange = (date) => {
-    setEmploiFormData((prev) => ({ ...prev, dateFin: date }));
-  };
+  // ❌ REMOVED: handleDateDebutChange, handleDateFinChange, handleHeureDebutChange and handleHeureFinChange
+  // Now using DatePicker for date inputs and handleSeanceChange for time inputs
 
   const getClassName = (classeRef) => {
     if (!classeRef) return "Not assigned";
@@ -231,8 +230,8 @@ export default function AdminTimetable() {
       titre: "",
       description: "",
       classe: "",
-      dateDebut: null,
-      dateFin: null,
+      dateDebut: "",
+      dateFin: "",
     });
     setShowCreateEmploiDialog(true);
   };
@@ -280,8 +279,8 @@ export default function AdminTimetable() {
       titre: emploi.titre || "",
       description: emploi.description || "",
       classe: classeId || "",
-      dateDebut: emploi.dateDebut ? new Date(emploi.dateDebut) : null,
-      dateFin: emploi.dateFin ? new Date(emploi.dateFin) : null,
+      dateDebut: emploi.dateDebut ? new Date(emploi.dateDebut).toISOString().split('T')[0] : "",
+      dateFin: emploi.dateFin ? new Date(emploi.dateFin).toISOString().split('T')[0] : "",
     });
     setShowUpdateEmploiDialog(true);
   };
@@ -794,7 +793,7 @@ export default function AdminTimetable() {
             </DialogHeader>
             <div className="space-y-4">
               <div>
-                <Label>Title</Label>
+                <Label>Title *</Label>
                 <Input
                   name="titre"
                   value={emploiFormData.titre}
@@ -812,7 +811,7 @@ export default function AdminTimetable() {
                 />
               </div>
               <div>
-                <Label>Class</Label>
+                <Label>Class *</Label>
                 <Select
                   value={emploiFormData.classe}
                   onValueChange={(value) =>
@@ -833,18 +832,18 @@ export default function AdminTimetable() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>Start Date</Label>
+                  <Label>Start Date *</Label>
                   <DatePicker
-                    date={emploiFormData.dateDebut}
-                    setDate={handleDateDebutChange}
+                    date={emploiFormData.dateDebut ? new Date(emploiFormData.dateDebut) : null}
+                    setDate={(d) => setEmploiFormData(prev => ({...prev, dateDebut: d ? d.toISOString().split('T')[0] : ''}))}
                     placeholder="Pick start date"
                   />
                 </div>
                 <div>
-                  <Label>End Date</Label>
+                  <Label>End Date *</Label>
                   <DatePicker
-                    date={emploiFormData.dateFin}
-                    setDate={handleDateFinChange}
+                    date={emploiFormData.dateFin ? new Date(emploiFormData.dateFin) : null}
+                    setDate={(d) => setEmploiFormData(prev => ({...prev, dateFin: d ? d.toISOString().split('T')[0] : ''}))}
                     placeholder="Pick end date"
                   />
                 </div>
@@ -869,6 +868,7 @@ export default function AdminTimetable() {
         <Dialog
           open={showUpdateEmploiDialog}
           onOpenChange={setShowUpdateEmploiDialog}
+          modal={false}
         >
           <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
@@ -877,7 +877,7 @@ export default function AdminTimetable() {
             </DialogHeader>
             <div className="space-y-4">
               <div>
-                <Label>Title</Label>
+                <Label>Title *</Label>
                 <Input
                   name="titre"
                   value={emploiFormData.titre}
@@ -895,7 +895,7 @@ export default function AdminTimetable() {
                 />
               </div>
               <div>
-                <Label>Class</Label>
+                <Label>Class *</Label>
                 <Select
                   value={emploiFormData.classe}
                   onValueChange={(value) =>
@@ -916,18 +916,18 @@ export default function AdminTimetable() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>Start Date</Label>
+                  <Label>Start Date *</Label>
                   <DatePicker
-                    date={emploiFormData.dateDebut}
-                    setDate={handleDateDebutChange}
+                    date={emploiFormData.dateDebut ? new Date(emploiFormData.dateDebut) : null}
+                    setDate={(d) => setEmploiFormData(prev => ({...prev, dateDebut: d ? d.toISOString().split('T')[0] : ''}))}
                     placeholder="Pick start date"
                   />
                 </div>
                 <div>
-                  <Label>End Date</Label>
+                  <Label>End Date *</Label>
                   <DatePicker
-                    date={emploiFormData.dateFin}
-                    setDate={handleDateFinChange}
+                    date={emploiFormData.dateFin ? new Date(emploiFormData.dateFin) : null}
+                    setDate={(d) => setEmploiFormData(prev => ({...prev, dateFin: d ? d.toISOString().split('T')[0] : ''}))}
                     placeholder="Pick end date"
                   />
                 </div>
@@ -1088,6 +1088,8 @@ export default function AdminTimetable() {
                   />
                 </div>
               </div>
+              
+              {/* ✅ FIXED: Changed from TimePicker to Input type="time" */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>Start Time *</Label>
@@ -1096,6 +1098,7 @@ export default function AdminTimetable() {
                     name="heureDebut"
                     value={seanceFormData.heureDebut}
                     onChange={handleSeanceChange}
+                    className="w-full"
                   />
                 </div>
                 <div>
@@ -1105,9 +1108,11 @@ export default function AdminTimetable() {
                     name="heureFin"
                     value={seanceFormData.heureFin}
                     onChange={handleSeanceChange}
+                    className="w-full"
                   />
                 </div>
               </div>
+
               <div>
                 <Label>Notes</Label>
                 <Textarea
@@ -1262,6 +1267,8 @@ export default function AdminTimetable() {
                   />
                 </div>
               </div>
+              
+              {/* ✅ FIXED: Changed from TimePicker to Input type="time" */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>Start Time *</Label>
@@ -1270,6 +1277,7 @@ export default function AdminTimetable() {
                     name="heureDebut"
                     value={seanceFormData.heureDebut}
                     onChange={handleSeanceChange}
+                    className="w-full"
                   />
                 </div>
                 <div>
@@ -1279,9 +1287,11 @@ export default function AdminTimetable() {
                     name="heureFin"
                     value={seanceFormData.heureFin}
                     onChange={handleSeanceChange}
+                    className="w-full"
                   />
                 </div>
               </div>
+
               <div>
                 <Label>Notes</Label>
                 <Textarea
