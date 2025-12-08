@@ -75,27 +75,8 @@ export default function TeacherAttendance() {
       console.log('Seances data:', seancesData);
       console.log('Students data:', studentsData);
 
-      // Filter seances taught by current teacher
-      // TEMPORARY FIX: If seance has no enseignant, check if teacher teaches the course
-      const teacherSeances = seancesData.filter(seance => {
-        // Check if seance has enseignant field
-        const enseignantId = seance.enseignant?._id || seance.enseignant;
-        if (enseignantId) {
-          return enseignantId === currentUser._id;
-        }
-        
-        // FALLBACK: Check if teacher teaches the course (for old data)
-        const coursEnseignantId = seance.cours?.enseignant?._id || seance.cours?.enseignant;
-        if (coursEnseignantId) {
-          return coursEnseignantId === currentUser._id;
-        }
-        
-        // If admin or no filter available, show all seances
-        return currentUser.role === 'admin';
-      });
-
-      console.log('Teacher seances:', teacherSeances);
-      setSeances(teacherSeances);
+      // Seances are already filtered by backend based on user role
+      setSeances(seancesData);
 
       // Filter students - handle different response formats
       let studentUsers = [];
@@ -112,14 +93,14 @@ export default function TeacherAttendance() {
       setAllStudents(studentUsers);
 
       // Calculate overall stats for all teacher's seances
-      if (teacherSeances.length > 0) {
-        await calculateOverallStats(teacherSeances);
+      if (seancesData.length > 0) {
+        await calculateOverallStats(seancesData);
       }
 
       // Set default seance if available
-      if (teacherSeances.length > 0) {
-        setSelectedSeance(teacherSeances[0]._id);
-        setSelectedSeanceData(teacherSeances[0]);
+      if (seancesData.length > 0) {
+        setSelectedSeance(seancesData[0]._id);
+        setSelectedSeanceData(seancesData[0]);
       }
 
     } catch (error) {
