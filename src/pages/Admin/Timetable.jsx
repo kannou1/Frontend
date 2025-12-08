@@ -90,6 +90,12 @@ export default function AdminTimetable() {
     type: null,
   });
 
+  // Form error states
+  const [emploiFormError, setEmploiFormError] = useState("");
+  const [updateEmploiFormError, setUpdateEmploiFormError] = useState("");
+  const [createSeanceFormError, setCreateSeanceFormError] = useState("");
+  const [updateSeanceFormError, setUpdateSeanceFormError] = useState("");
+
   const [emploiFormData, setEmploiFormData] = useState({
     titre: "",
     description: "",
@@ -173,6 +179,14 @@ export default function AdminTimetable() {
     setSeanceFormData({ ...seanceFormData, [e.target.name]: e.target.value });
   };
 
+  const handleStartTimeChange = (newTime) => {
+    setSeanceFormData(prev => ({ ...prev, heureDebut: newTime }));
+  };
+
+  const handleEndTimeChange = (newTime) => {
+    setSeanceFormData(prev => ({ ...prev, heureFin: newTime }));
+  };
+
   const handleSelectChange = (name, value, formType) => {
     if (formType === "emploi") {
       setEmploiFormData((prev) => ({ ...prev, [name]: value }));
@@ -180,9 +194,6 @@ export default function AdminTimetable() {
       setSeanceFormData((prev) => ({ ...prev, [name]: value }));
     }
   };
-
-  // ❌ REMOVED: handleDateDebutChange, handleDateFinChange, handleHeureDebutChange and handleHeureFinChange
-  // Now using DatePicker for date inputs and handleSeanceChange for time inputs
 
   const getClassName = (classeRef) => {
     if (!classeRef) return "Not assigned";
@@ -233,6 +244,7 @@ export default function AdminTimetable() {
       dateDebut: "",
       dateFin: "",
     });
+    setEmploiFormError("");
     setShowCreateEmploiDialog(true);
   };
 
@@ -247,14 +259,14 @@ export default function AdminTimetable() {
         !emploiFormData.classe ||
         !emploiFormData.dateDebut ||
         !emploiFormData.dateFin
-      )
-        return showToast(
-          "error",
-          "Please fill in required fields (Title, Class, Start Date, End Date)"
-        );
+      ) {
+        setEmploiFormError("Please fill in required fields (Title, Class, Start Date, End Date)");
+        return;
+      }
 
       const newEmploi = await createEmploi(emploiFormData, token);
       setEmplois((prev) => [...prev, newEmploi]);
+      setEmploiFormError("");
       showToast("success", "Timetable created successfully!");
       setShowCreateEmploiDialog(false);
     } catch (err) {
@@ -282,6 +294,7 @@ export default function AdminTimetable() {
       dateDebut: emploi.dateDebut ? new Date(emploi.dateDebut).toISOString().split('T')[0] : "",
       dateFin: emploi.dateFin ? new Date(emploi.dateFin).toISOString().split('T')[0] : "",
     });
+    setUpdateEmploiFormError("");
     setShowUpdateEmploiDialog(true);
   };
 
@@ -296,16 +309,19 @@ export default function AdminTimetable() {
         !emploiFormData.classe ||
         !emploiFormData.dateDebut ||
         !emploiFormData.dateFin
-      )
-        return showToast("error", "Please fill in required fields");
+      ) {
+        setUpdateEmploiFormError("Please fill in required fields");
+        return;
+      }
 
       const emploiId = extractId(editingEmploi);
       const updatedEmploi = await updateEmploi(emploiId, emploiFormData, token);
-      
+
       setEmplois((prev) =>
         prev.map((e) => (extractId(e) === emploiId ? updatedEmploi : e))
       );
-      
+
+      setUpdateEmploiFormError("");
       showToast("success", "Timetable updated successfully!");
       setShowUpdateEmploiDialog(false);
       setEditingEmploi(null);
@@ -341,6 +357,7 @@ export default function AdminTimetable() {
       emploiDuTemps: emploiId,
       notes: "",
     });
+    setCreateSeanceFormError("");
     setShowCreateSeanceDialog(true);
   };
 
@@ -361,11 +378,13 @@ export default function AdminTimetable() {
         !seanceFormData.cours ||
         !seanceFormData.enseignant
       ) {
-        return showToast("error", "Please fill in all required fields including session name");
+        setCreateSeanceFormError("Please fill in all required fields including session name");
+        return;
       }
 
       const newSeance = await createSeance(seanceFormData, token);
       setSeances((prev) => [...prev, newSeance]);
+      setCreateSeanceFormError("");
       showToast("success", "Session created successfully!");
       setShowCreateSeanceDialog(false);
     } catch (err) {
@@ -406,6 +425,7 @@ export default function AdminTimetable() {
       emploiDuTemps: emploiId || "",
       notes: seance.notes || "",
     });
+    setUpdateSeanceFormError("");
     setShowUpdateSeanceDialog(true);
   };
 
@@ -426,16 +446,18 @@ export default function AdminTimetable() {
         !seanceFormData.cours ||
         !seanceFormData.enseignant
       ) {
-        return showToast("error", "Please fill in all required fields including session name");
+        setUpdateSeanceFormError("Please fill in all required fields including session name");
+        return;
       }
 
       const seanceId = extractId(editingSeance);
       const updatedSeance = await updateSeance(seanceId, seanceFormData, token);
-      
+
       setSeances((prev) =>
         prev.map((s) => (extractId(s) === seanceId ? updatedSeance : s))
       );
-      
+
+      setUpdateSeanceFormError("");
       showToast("success", "Session updated successfully!");
       setShowUpdateSeanceDialog(false);
       setEditingSeance(null);
@@ -791,6 +813,11 @@ export default function AdminTimetable() {
                 Fill in the details to create a new timetable
               </DialogDescription>
             </DialogHeader>
+            {emploiFormError && (
+              <Alert variant="destructive">
+                <AlertDescription>{emploiFormError}</AlertDescription>
+              </Alert>
+            )}
             <div className="space-y-4">
               <div>
                 <Label>Title *</Label>
@@ -875,6 +902,11 @@ export default function AdminTimetable() {
               <DialogTitle>Update Timetable</DialogTitle>
               <DialogDescription>Modify the timetable details</DialogDescription>
             </DialogHeader>
+            {updateEmploiFormError && (
+              <Alert variant="destructive">
+                <AlertDescription>{updateEmploiFormError}</AlertDescription>
+              </Alert>
+            )}
             <div className="space-y-4">
               <div>
                 <Label>Title *</Label>
@@ -969,6 +1001,11 @@ export default function AdminTimetable() {
                 Fill in the details to create a new session
               </DialogDescription>
             </DialogHeader>
+            {createSeanceFormError && (
+              <Alert variant="destructive">
+                <AlertDescription>{createSeanceFormError}</AlertDescription>
+              </Alert>
+            )}
             <div className="space-y-4">
               <div>
                 <Label>Session Name *</Label>
@@ -1089,26 +1126,21 @@ export default function AdminTimetable() {
                 </div>
               </div>
               
-              {/* ✅ FIXED: Changed from TimePicker to Input type="time" */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>Start Time *</Label>
-                  <Input
-                    type="time"
-                    name="heureDebut"
-                    value={seanceFormData.heureDebut}
-                    onChange={handleSeanceChange}
-                    className="w-full"
+                  <TimePicker
+                    time={seanceFormData.heureDebut}
+                    setTime={handleStartTimeChange}
+                    placeholder="Pick start time"
                   />
                 </div>
                 <div>
                   <Label>End Time *</Label>
-                  <Input
-                    type="time"
-                    name="heureFin"
-                    value={seanceFormData.heureFin}
-                    onChange={handleSeanceChange}
-                    className="w-full"
+                  <TimePicker
+                    time={seanceFormData.heureFin}
+                    setTime={handleEndTimeChange}
+                    placeholder="Pick end time"
                   />
                 </div>
               </div>
@@ -1148,6 +1180,11 @@ export default function AdminTimetable() {
               <DialogTitle>Update Session</DialogTitle>
               <DialogDescription>Modify the session details</DialogDescription>
             </DialogHeader>
+            {updateSeanceFormError && (
+              <Alert variant="destructive">
+                <AlertDescription>{updateSeanceFormError}</AlertDescription>
+              </Alert>
+            )}
             <div className="space-y-4">
               <div>
                 <Label>Session Name *</Label>
@@ -1268,26 +1305,21 @@ export default function AdminTimetable() {
                 </div>
               </div>
               
-              {/* ✅ FIXED: Changed from TimePicker to Input type="time" */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>Start Time *</Label>
-                  <Input
-                    type="time"
-                    name="heureDebut"
-                    value={seanceFormData.heureDebut}
-                    onChange={handleSeanceChange}
-                    className="w-full"
+                  <TimePicker
+                    time={seanceFormData.heureDebut}
+                    setTime={handleStartTimeChange}
+                    placeholder="Pick start time"
                   />
                 </div>
                 <div>
                   <Label>End Time *</Label>
-                  <Input
-                    type="time"
-                    name="heureFin"
-                    value={seanceFormData.heureFin}
-                    onChange={handleSeanceChange}
-                    className="w-full"
+                  <TimePicker
+                    time={seanceFormData.heureFin}
+                    setTime={handleEndTimeChange}
+                    placeholder="Pick end time"
                   />
                 </div>
               </div>

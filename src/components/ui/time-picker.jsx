@@ -45,42 +45,42 @@ function TimePicker({ time, setTime, placeholder = "Pick time", className }) {
   const minutes = Array.from({length:12}, (_,i) => pad(i*5));
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button variant="outline" className={cn("justify-start text-left font-normal", className)} aria-label={time ? `Selected time ${time}` : placeholder}>
-          <Clock className="mr-2 h-4 w-4" />
-          {time ? time : <span className="text-muted-foreground">{placeholder}</span>}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-auto p-3 z-50" align="start">
-        <div className="flex gap-2 mb-3">
-          <Select value={hour} onValueChange={(v) => setHour(v)}>
-            <SelectTrigger className="w-[80px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {hours.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
-            </SelectContent>
-          </Select>
+    <div className="relative">
+      <Button variant="outline" className={cn("justify-start text-left font-normal", className)} onClick={() => setOpen(!open)} aria-label={time ? `Selected time ${time}` : placeholder}>
+        <Clock className="mr-2 h-4 w-4" />
+        {time ? time : <span className="text-muted-foreground">{placeholder}</span>}
+      </Button>
+      {open && (
+        <div className="absolute top-full left-0 z-[100] w-auto p-3 bg-popover border rounded-md shadow-md">
+          <div className="flex gap-2 mb-3">
+            <Select value={hour} onValueChange={(v) => setHour(v)}>
+              <SelectTrigger className="w-[80px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {hours.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
+              </SelectContent>
+            </Select>
 
-          <Select value={minute} onValueChange={(v) => setMinute(v)}>
-            <SelectTrigger className="w-[80px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {minutes.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
+            <Select value={minute} onValueChange={(v) => setMinute(v)}>
+              <SelectTrigger className="w-[80px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {minutes.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
 
-        <div className="flex gap-2">
-          <Button variant="ghost" size="sm" onClick={clear}>Clear</Button>
-          <Button variant="outline" size="sm" onClick={now}>Now</Button>
-          <div className="flex-1" />
-          <Button onClick={apply} size="sm">Apply</Button>
+          <div className="flex gap-2">
+            <Button variant="ghost" size="sm" onClick={clear}>Clear</Button>
+            <Button variant="outline" size="sm" onClick={now}>Now</Button>
+            <div className="flex-1" />
+            <Button onClick={apply} size="sm">Apply</Button>
+          </div>
         </div>
-      </PopoverContent>
-    </Popover>
+      )}
+    </div>
   );
 }
 
