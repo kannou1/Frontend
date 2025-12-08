@@ -111,6 +111,30 @@ const StudentAttendance = () => {
     return colors[index];
   };
 
+  const getAcademicYear = () => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth(); // 0-11, September is 8
+
+    if (currentMonth >= 8) { // September or later
+      return `${currentYear}-${currentYear + 1}`;
+    } else { // Before September
+      return `${currentYear - 1}-${currentYear}`;
+    }
+  };
+
+  const getAttendanceMessage = (percentage) => {
+    if (percentage >= 90) {
+      return "You're maintaining excellent attendance! Keep up the great work.";
+    } else if (percentage >= 80) {
+      return "You're doing well with your attendance. Keep it up!";
+    } else if (percentage >= 70) {
+      return "Your attendance is acceptable, but there's room for improvement.";
+    } else {
+      return "Your attendance needs improvement. Please try to attend more classes.";
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -169,11 +193,11 @@ const StudentAttendance = () => {
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold">Overall Attendance</h2>
-                  <p className="text-sm text-muted-foreground">Academic Year 2024-2025</p>
+                  <p className="text-sm text-muted-foreground">Academic Year {getAcademicYear()}</p>
                 </div>
               </div>
               <p className="text-muted-foreground">
-                You're maintaining excellent attendance! Keep up the great work.
+                {getAttendanceMessage(overallPercentage)}
               </p>
             </div>
             
@@ -195,7 +219,7 @@ const StudentAttendance = () => {
         </Card>
 
         {/* Courses Attendance */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           {courses.map((course, index) => (
             <Card 
               key={course.id}
@@ -217,7 +241,25 @@ const StudentAttendance = () => {
                   </div>
                 </div>
 
-                <Progress value={course.percentage} className="h-3 mb-4" />
+                {/* Enhanced Progress Bar */}
+                <div className="mb-4 space-y-2">
+                  <div className="relative h-4 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden shadow-inner">
+                    <div 
+                      className={`absolute inset-y-0 left-0 bg-gradient-to-r ${course.color} rounded-full transition-all duration-1000 ease-out shadow-lg`}
+                      style={{ 
+                        width: `${course.percentage}%`,
+                        boxShadow: `0 0 20px ${course.percentage > 75 ? 'rgba(34, 197, 94, 0.4)' : course.percentage > 50 ? 'rgba(234, 179, 8, 0.4)' : 'rgba(239, 68, 68, 0.4)'}`
+                      }}
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer" />
+                    </div>
+                    <div className="absolute inset-0 flex items-center justify-end pr-2">
+                      <span className="text-xs font-bold text-gray-700 dark:text-gray-300 drop-shadow-sm">
+                        {course.percentage}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
 
                 <div className="grid grid-cols-3 gap-3 text-center">
                   <div className="p-3 rounded-lg bg-muted/50">

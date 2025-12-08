@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Calendar, Clock, CheckCircle, XCircle, Users, Loader2, RefreshCw, AlertCircle } from 'lucide-react';
 import { getAllSeances } from '@/services/seanceService';
 import { getEtudiants } from '@/services/userService';
@@ -15,6 +16,7 @@ export default function TeacherAttendance() {
   const [selectedSeance, setSelectedSeance] = useState('');
   const [selectedSeanceData, setSelectedSeanceData] = useState(null);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDateObj, setSelectedDateObj] = useState(new Date());
   const [seances, setSeances] = useState([]);
   const [allStudents, setAllStudents] = useState([]);
   const [classStudents, setClassStudents] = useState([]);

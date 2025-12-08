@@ -56,6 +56,7 @@ import {
 } from "@/services/seanceService";
 import { getAllClasses } from "@/services/classeService";
 import { getAllCours } from "@/services/coursService";
+import { getEnseignants } from "@/services/userService";
 
 export default function AdminTimetable() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -64,6 +65,7 @@ export default function AdminTimetable() {
   const [seances, setSeances] = useState([]);
   const [classes, setClasses] = useState([]);
   const [courses, setCourses] = useState([]);
+  const [teachers, setTeachers] = useState([]);
   const [loading, setLoading] = useState(true);
   
   // Dialog states
@@ -93,6 +95,7 @@ export default function AdminTimetable() {
   });
 
   const [seanceFormData, setSeanceFormData] = useState({
+    nom: "",
     jourSemaine: "",
     heureDebut: "",
     heureFin: "",
@@ -100,9 +103,17 @@ export default function AdminTimetable() {
     typeCours: "",
     cours: "",
     classe: "",
+    enseignant: "",
     emploiDuTemps: "",
     notes: "",
   });
+
+  // Helper function to safely extract ID
+  const extractId = (ref) => {
+    if (!ref) return null;
+    if (typeof ref === "string") return ref;
+    return ref._id || ref.id || null;
+  };
 
   // ---------------------------
   // Fetch data from API
@@ -116,18 +127,20 @@ export default function AdminTimetable() {
         return;
       }
 
-      const [emploisData, seancesData, classesData, coursesData] =
+      const [emploisData, seancesData, classesData, coursesData, teachersData] =
         await Promise.all([
           getAllEmplois(token),
           getAllSeances(token),
           getAllClasses(),
           getAllCours(),
+          getEnseignants(),
         ]);
 
       setEmplois(emploisData);
       setSeances(seancesData);
       setClasses(classesData);
       setCourses(coursesData);
+      setTeachers(teachersData);
     } catch (err) {
       console.error("Failed to fetch data:", err);
       showToast("error", "Failed to load data");
@@ -174,19 +187,23 @@ export default function AdminTimetable() {
 
   const getClassName = (classeRef) => {
     if (!classeRef) return "Not assigned";
-    let id = classeRef;
-    if (typeof classeRef === "object") id = classeRef._id || classeRef.id;
-    const classe =
-      classes.find(
-        (c) => c._id === id || c.id === id || c._id === String(id)
-      ) || null;
+    const id = extractId(classeRef);
+    const classe = classes.find((c) => extractId(c) === id);
     return classe ? classe.nom : "Not assigned";
   };
 
-  const getCourseName = (coursId) => {
-    if (!coursId) return "Not assigned";
-    const course = courses.find((c) => (c.id || c._id) === coursId);
+  const getCourseName = (coursRef) => {
+    if (!coursRef) return "Not assigned";
+    const id = extractId(coursRef);
+    const course = courses.find((c) => extractId(c) === id);
     return course ? course.nom : "Not assigned";
+  };
+
+  const getTeacherName = (enseignantRef) => {
+    if (!enseignantRef) return "Not assigned";
+    const id = extractId(enseignantRef);
+    const teacher = teachers.find((t) => extractId(t) === id);
+    return teacher ? `${teacher.nom} ${teacher.prenom}` : "Not assigned";
   };
 
   // ---------------------------
@@ -194,7 +211,7 @@ export default function AdminTimetable() {
   // ---------------------------
   const getSeancesForEmploi = (emploiId) => {
     return seances.filter((seance) => {
-      const eId = seance.emploiDuTemps?._id || seance.emploiDuTemps;
+      const eId = extractId(seance.emploiDuTemps);
       return eId === emploiId;
     });
   };
@@ -257,11 +274,7 @@ export default function AdminTimetable() {
   // ---------------------------
   const openUpdateEmploiDialog = (emploi) => {
     setEditingEmploi(emploi);
-
-    // Extract classe ID if it's an object
-    const classeId = typeof emploi.classe === 'object'
-      ? (emploi.classe?._id || emploi.classe?.id)
-      : emploi.classe;
+    const classeId = extractId(emploi.classe);
 
     setEmploiFormData({
       titre: emploi.titre || "",
@@ -285,16 +298,13 @@ export default function AdminTimetable() {
         !emploiFormData.dateDebut ||
         !emploiFormData.dateFin
       )
-        return showToast(
-          "error",
-          "Please fill in required fields"
-        );
+        return showToast("error", "Please fill in required fields");
 
-      const emploiId = editingEmploi._id || editingEmploi.id;
+      const emploiId = extractId(editingEmploi);
       const updatedEmploi = await updateEmploi(emploiId, emploiFormData, token);
       
       setEmplois((prev) =>
-        prev.map((e) => ((e._id || e.id) === emploiId ? updatedEmploi : e))
+        prev.map((e) => (extractId(e) === emploiId ? updatedEmploi : e))
       );
       
       showToast("success", "Timetable updated successfully!");
@@ -316,15 +326,20 @@ export default function AdminTimetable() {
   // ---------------------------
   const openCreateSeanceDialog = (emploi) => {
     setSelectedEmploi(emploi);
+    const classeId = extractId(emploi.classe);
+    const emploiId = extractId(emploi);
+
     setSeanceFormData({
+      nom: "",
       jourSemaine: "",
       heureDebut: "",
       heureFin: "",
       salle: "",
       typeCours: "",
       cours: "",
-      classe: emploi.classe,
-      emploiDuTemps: emploi._id,
+      classe: classeId,
+      enseignant: "",
+      emploiDuTemps: emploiId,
       notes: "",
     });
     setShowCreateSeanceDialog(true);
@@ -336,47 +351,21 @@ export default function AdminTimetable() {
       const token = localStorage.getItem("token");
       if (!token) return showToast("error", "Authentication required");
 
+      // Validate required fields (including nom)
       if (
+        !seanceFormData.nom ||
         !seanceFormData.jourSemaine ||
         !seanceFormData.heureDebut ||
         !seanceFormData.heureFin ||
         !seanceFormData.salle ||
         !seanceFormData.typeCours ||
-        !seanceFormData.cours
-      )
-        return showToast("error", "Please fill in all required fields");
+        !seanceFormData.cours ||
+        !seanceFormData.enseignant
+      ) {
+        return showToast("error", "Please fill in all required fields including session name");
+      }
 
-      const emploi = emplois.find(
-        (e) => e._id === seanceFormData.emploiDuTemps
-      );
-      if (!emploi) return showToast("error", "Associated timetable not found");
-
-      const dayMap = {
-        Dimanche: 0,
-        Lundi: 1,
-        Mardi: 2,
-        Mercredi: 3,
-        Jeudi: 4,
-        Vendredi: 5,
-        Samedi: 6,
-      };
-
-      const startDate = new Date(emploi.dateDebut);
-      const dayOffset =
-        (dayMap[seanceFormData.jourSemaine] + 7 - startDate.getDay()) % 7;
-
-      const dateDebut = new Date(startDate);
-      dateDebut.setDate(startDate.getDate() + dayOffset);
-      dateDebut.setHours(parseInt(seanceFormData.heureDebut.split(":")[0]));
-      dateDebut.setMinutes(parseInt(seanceFormData.heureDebut.split(":")[1]));
-
-      const dateFin = new Date(startDate);
-      dateFin.setDate(startDate.getDate() + dayOffset);
-      dateFin.setHours(parseInt(seanceFormData.heureFin.split(":")[0]));
-      dateFin.setMinutes(parseInt(seanceFormData.heureFin.split(":")[1]));
-
-      const seanceData = { ...seanceFormData, dateDebut, dateFin };
-      const newSeance = await createSeance(seanceData, token);
+      const newSeance = await createSeance(seanceFormData, token);
       setSeances((prev) => [...prev, newSeance]);
       showToast("success", "Session created successfully!");
       setShowCreateSeanceDialog(false);
@@ -396,25 +385,17 @@ export default function AdminTimetable() {
   // ---------------------------
   const openUpdateSeanceDialog = (seance) => {
     setEditingSeance(seance);
-    
-    // Extract IDs if they're objects
-    const coursId = typeof seance.cours === 'object' 
-      ? (seance.cours?._id || seance.cours?.id)
-      : seance.cours;
-    
-    const classeId = typeof seance.classe === 'object' 
-      ? (seance.classe?._id || seance.classe?.id)
-      : seance.classe;
-    
-    const emploiId = typeof seance.emploiDuTemps === 'object'
-      ? (seance.emploiDuTemps?._id || seance.emploiDuTemps?.id)
-      : seance.emploiDuTemps;
-    
-    // Find the emploi for this seance
-    const emploi = emplois.find(e => (e._id || e.id) === emploiId);
+
+    const coursId = extractId(seance.cours);
+    const classeId = extractId(seance.classe);
+    const emploiId = extractId(seance.emploiDuTemps);
+    const enseignantId = extractId(seance.enseignant);
+
+    const emploi = emplois.find((e) => extractId(e) === emploiId);
     setSelectedEmploi(emploi);
-    
+
     setSeanceFormData({
+      nom: seance.nom || "",
       jourSemaine: seance.jourSemaine || "",
       heureDebut: seance.heureDebut || "",
       heureFin: seance.heureFin || "",
@@ -422,6 +403,7 @@ export default function AdminTimetable() {
       typeCours: seance.typeCours || "",
       cours: coursId || "",
       classe: classeId || "",
+      enseignant: enseignantId || "",
       emploiDuTemps: emploiId || "",
       notes: seance.notes || "",
     });
@@ -434,52 +416,25 @@ export default function AdminTimetable() {
       const token = localStorage.getItem("token");
       if (!token) return showToast("error", "Authentication required");
 
+      // Validate required fields (including nom)
       if (
+        !seanceFormData.nom ||
         !seanceFormData.jourSemaine ||
         !seanceFormData.heureDebut ||
         !seanceFormData.heureFin ||
         !seanceFormData.salle ||
         !seanceFormData.typeCours ||
-        !seanceFormData.cours
-      )
-        return showToast("error", "Please fill in all required fields");
+        !seanceFormData.cours ||
+        !seanceFormData.enseignant
+      ) {
+        return showToast("error", "Please fill in all required fields including session name");
+      }
 
-      const emploi = emplois.find(
-        (e) => (e._id || e.id) === seanceFormData.emploiDuTemps
-      );
-      if (!emploi) return showToast("error", "Associated timetable not found");
-
-      const dayMap = {
-        Dimanche: 0,
-        Lundi: 1,
-        Mardi: 2,
-        Mercredi: 3,
-        Jeudi: 4,
-        Vendredi: 5,
-        Samedi: 6,
-      };
-
-      const startDate = new Date(emploi.dateDebut);
-      const dayOffset =
-        (dayMap[seanceFormData.jourSemaine] + 7 - startDate.getDay()) % 7;
-
-      const dateDebut = new Date(startDate);
-      dateDebut.setDate(startDate.getDate() + dayOffset);
-      dateDebut.setHours(parseInt(seanceFormData.heureDebut.split(":")[0]));
-      dateDebut.setMinutes(parseInt(seanceFormData.heureDebut.split(":")[1]));
-
-      const dateFin = new Date(startDate);
-      dateFin.setDate(startDate.getDate() + dayOffset);
-      dateFin.setHours(parseInt(seanceFormData.heureFin.split(":")[0]));
-      dateFin.setMinutes(parseInt(seanceFormData.heureFin.split(":")[1]));
-
-      const seanceData = { ...seanceFormData, dateDebut, dateFin };
-      const seanceId = editingSeance._id || editingSeance.id;
-      
-      const updatedSeance = await updateSeance(seanceId, seanceData, token);
+      const seanceId = extractId(editingSeance);
+      const updatedSeance = await updateSeance(seanceId, seanceFormData, token);
       
       setSeances((prev) =>
-        prev.map((s) => ((s._id || s.id) === seanceId ? updatedSeance : s))
+        prev.map((s) => (extractId(s) === seanceId ? updatedSeance : s))
       );
       
       showToast("success", "Session updated successfully!");
@@ -500,14 +455,10 @@ export default function AdminTimetable() {
   const getCoursesForSelectedClass = () => {
     if (!selectedEmploi) return [];
     
-    const classeId = typeof selectedEmploi.classe === 'object' 
-      ? (selectedEmploi.classe?._id || selectedEmploi.classe?.id)
-      : selectedEmploi.classe;
+    const classeId = extractId(selectedEmploi.classe);
     
     return courses.filter((cours) => {
-      const coursClasseId = typeof cours.classe === 'object'
-        ? (cours.classe?._id || cours.classe?.id)
-        : cours.classe;
+      const coursClasseId = extractId(cours.classe);
       return coursClasseId === classeId;
     });
   };
@@ -521,10 +472,8 @@ export default function AdminTimetable() {
       if (!token) return showToast("error", "Authentication required");
 
       await deleteEmploi(id, token);
-      setEmplois((prev) => prev.filter((e) => e._id !== id && e.id !== id));
-      setSeances((prev) =>
-        prev.filter((s) => (s.emploiDuTemps?._id || s.emploiDuTemps) !== id)
-      );
+      setEmplois((prev) => prev.filter((e) => extractId(e) !== id));
+      setSeances((prev) => prev.filter((s) => extractId(s.emploiDuTemps) !== id));
       showToast("success", "Timetable deleted successfully!");
     } catch (err) {
       console.error(err);
@@ -538,7 +487,7 @@ export default function AdminTimetable() {
       if (!token) return showToast("error", "Authentication required");
 
       await deleteSeance(id, token);
-      setSeances((prev) => prev.filter((s) => s._id !== id && s.id !== id));
+      setSeances((prev) => prev.filter((s) => extractId(s) !== id));
       showToast("success", "Session deleted successfully!");
     } catch (err) {
       console.error(err);
@@ -554,12 +503,9 @@ export default function AdminTimetable() {
       ?.toLowerCase()
       .includes(searchTerm.toLowerCase());
     
-    const emploiClasseId = typeof emploi.classe === 'object' 
-      ? (emploi.classe?._id || emploi.classe?.id)
-      : emploi.classe;
+    const emploiClasseId = extractId(emploi.classe);
+    const matchesClasse = filterClasse === "all" || emploiClasseId === filterClasse;
     
-    const matchesClasse =
-      filterClasse === "all" || emploiClasseId === filterClasse;
     return matchesSearch && matchesClasse;
   });
 
@@ -635,10 +581,7 @@ export default function AdminTimetable() {
                 <SelectContent>
                   <SelectItem value="all">All Classes</SelectItem>
                   {classes.map((classe) => (
-                    <SelectItem
-                      key={classe._id || classe.id}
-                      value={classe._id || classe.id}
-                    >
+                    <SelectItem key={extractId(classe)} value={extractId(classe)}>
                       {classe.nom}
                     </SelectItem>
                   ))}
@@ -650,9 +593,7 @@ export default function AdminTimetable() {
             {loading && (
               <div className="text-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
-                <p className="mt-4 text-muted-foreground">
-                  Loading timetables...
-                </p>
+                <p className="mt-4 text-muted-foreground">Loading timetables...</p>
               </div>
             )}
 
@@ -668,15 +609,12 @@ export default function AdminTimetable() {
             <div className="space-y-4">
               {!loading &&
                 filteredEmplois.map((emploi) => {
-                  const emploiId = emploi._id || emploi.id;
+                  const emploiId = extractId(emploi);
                   const emploiSeances = getSeancesForEmploi(emploiId);
                   const isExpanded = expandedEmplois.has(emploiId);
 
                   return (
-                    <div
-                      key={emploiId}
-                      className="border rounded-lg overflow-hidden"
-                    >
+                    <div key={emploiId} className="border rounded-lg overflow-hidden">
                       {/* Emploi Header */}
                       <div className="flex items-center justify-between p-4 bg-muted/50">
                         <div className="flex items-center gap-4 flex-1">
@@ -696,15 +634,11 @@ export default function AdminTimetable() {
                             {emploi.titre?.slice(0, 2).toUpperCase() || "TT"}
                           </div>
                           <div>
-                            <p className="font-medium text-lg">
-                              {emploi.titre}
-                            </p>
+                            <p className="font-medium text-lg">{emploi.titre}</p>
                             <p className="text-sm text-muted-foreground">
                               {getClassName(emploi.classe)} •{" "}
                               {emploi.dateDebut
-                                ? new Date(
-                                    emploi.dateDebut
-                                  ).toLocaleDateString()
+                                ? new Date(emploi.dateDebut).toLocaleDateString()
                                 : "N/A"}{" "}
                               -{" "}
                               {emploi.dateFin
@@ -757,28 +691,28 @@ export default function AdminTimetable() {
                             </p>
                           ) : (
                             emploiSeances.map((seance) => {
-                              const seanceId = seance._id || seance.id;
+                              const seanceId = extractId(seance);
                               return (
                                 <div
                                   key={seanceId}
                                   className="p-4 border-b last:border-none rounded-md hover:bg-muted/10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4"
                                 >
                                   {/* Session Info */}
-                                  <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-2">
+                                  <div className="flex-1 grid grid-cols-1 md:grid-cols-5 gap-2">
                                     <div>
-                                      <p className="text-sm text-muted-foreground">
-                                        Course
-                                      </p>
+                                      <p className="text-sm text-muted-foreground">Name</p>
+                                      <p className="font-medium">{seance.nom || "Unnamed"}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-sm text-muted-foreground">Course</p>
                                       <p className="font-medium">
-                                        {getCourseName(seance.cours?._id || seance.cours)}
+                                        {getCourseName(seance.cours)}
                                       </p>
                                     </div>
                                     <div>
-                                      <p className="text-sm text-muted-foreground">
-                                        Class
-                                      </p>
+                                      <p className="text-sm text-muted-foreground">Teacher</p>
                                       <p className="font-medium">
-                                        {getClassName(seance.classe)}
+                                        {getTeacherName(seance.enseignant)}
                                       </p>
                                     </div>
                                     <div>
@@ -794,8 +728,8 @@ export default function AdminTimetable() {
                                         Day & Time
                                       </p>
                                       <p className="font-medium">
-                                        {seance.jourSemaine} •{" "}
-                                        {seance.heureDebut} - {seance.heureFin}
+                                        {seance.jourSemaine} • {seance.heureDebut} -{" "}
+                                        {seance.heureFin}
                                       </p>
                                     </div>
                                   </div>
@@ -803,9 +737,7 @@ export default function AdminTimetable() {
                                   {/* Optional Notes */}
                                   {seance.notes && (
                                     <div className="mt-2 md:mt-0 md:flex-1">
-                                      <p className="text-sm text-muted-foreground">
-                                        Notes
-                                      </p>
+                                      <p className="text-sm text-muted-foreground">Notes</p>
                                       <p className="text-sm">{seance.notes}</p>
                                     </div>
                                   )}
@@ -892,7 +824,7 @@ export default function AdminTimetable() {
                   </SelectTrigger>
                   <SelectContent>
                     {classes.map((classe) => (
-                      <SelectItem key={classe._id} value={classe._id}>
+                      <SelectItem key={extractId(classe)} value={extractId(classe)}>
                         {classe.nom}
                       </SelectItem>
                     ))}
@@ -941,9 +873,7 @@ export default function AdminTimetable() {
           <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
               <DialogTitle>Update Timetable</DialogTitle>
-              <DialogDescription>
-                Modify the timetable details
-              </DialogDescription>
+              <DialogDescription>Modify the timetable details</DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               <div>
@@ -977,7 +907,7 @@ export default function AdminTimetable() {
                   </SelectTrigger>
                   <SelectContent>
                     {classes.map((classe) => (
-                      <SelectItem key={classe._id} value={classe._id}>
+                      <SelectItem key={extractId(classe)} value={extractId(classe)}>
                         {classe.nom}
                       </SelectItem>
                     ))}
@@ -1004,7 +934,7 @@ export default function AdminTimetable() {
               </div>
             </div>
             <DialogFooter>
-              <Button 
+              <Button
                 variant="outline"
                 onClick={() => {
                   setShowUpdateEmploiDialog(false);
@@ -1032,7 +962,7 @@ export default function AdminTimetable() {
           open={showCreateSeanceDialog}
           onOpenChange={setShowCreateSeanceDialog}
         >
-          <DialogContent className="sm:max-w-[500px]">
+          <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Create Session</DialogTitle>
               <DialogDescription>
@@ -1041,7 +971,16 @@ export default function AdminTimetable() {
             </DialogHeader>
             <div className="space-y-4">
               <div>
-                <Label>Course</Label>
+                <Label>Session Name *</Label>
+                <Input
+                  name="nom"
+                  value={seanceFormData.nom}
+                  onChange={handleSeanceChange}
+                  placeholder="e.g., Session 1, Midterm Review"
+                />
+              </div>
+              <div>
+                <Label>Course *</Label>
                 <Select
                   value={seanceFormData.cours}
                   onValueChange={(value) =>
@@ -1058,7 +997,7 @@ export default function AdminTimetable() {
                       </div>
                     ) : (
                       getCoursesForSelectedClass().map((cours) => (
-                        <SelectItem key={cours._id} value={cours._id}>
+                        <SelectItem key={extractId(cours)} value={extractId(cours)}>
                           {cours.nom}
                         </SelectItem>
                       ))
@@ -1067,7 +1006,7 @@ export default function AdminTimetable() {
                 </Select>
               </div>
               <div>
-                <Label>Type</Label>
+                <Label>Type *</Label>
                 <Select
                   value={seanceFormData.typeCours}
                   onValueChange={(value) =>
@@ -1084,9 +1023,35 @@ export default function AdminTimetable() {
                   </SelectContent>
                 </Select>
               </div>
+              <div>
+                <Label>Teacher *</Label>
+                <Select
+                  value={seanceFormData.enseignant}
+                  onValueChange={(value) =>
+                    handleSelectChange("enseignant", value, "seance")
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select teacher" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {teachers.length === 0 ? (
+                      <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                        No teachers available
+                      </div>
+                    ) : (
+                      teachers.map((teacher) => (
+                        <SelectItem key={extractId(teacher)} value={extractId(teacher)}>
+                          {teacher.nom} {teacher.prenom}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>Day</Label>
+                  <Label>Day *</Label>
                   <Select
                     value={seanceFormData.jourSemaine}
                     onValueChange={(value) =>
@@ -1114,7 +1079,7 @@ export default function AdminTimetable() {
                   </Select>
                 </div>
                 <div>
-                  <Label>Room</Label>
+                  <Label>Room *</Label>
                   <Input
                     name="salle"
                     value={seanceFormData.salle}
@@ -1125,7 +1090,7 @@ export default function AdminTimetable() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>Start Time</Label>
+                  <Label>Start Time *</Label>
                   <Input
                     type="time"
                     name="heureDebut"
@@ -1134,7 +1099,7 @@ export default function AdminTimetable() {
                   />
                 </div>
                 <div>
-                  <Label>End Time</Label>
+                  <Label>End Time *</Label>
                   <Input
                     type="time"
                     name="heureFin"
@@ -1173,16 +1138,23 @@ export default function AdminTimetable() {
           open={showUpdateSeanceDialog}
           onOpenChange={setShowUpdateSeanceDialog}
         >
-          <DialogContent className="sm:max-w-[500px]">
+          <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Update Session</DialogTitle>
-              <DialogDescription>
-                Modify the session details
-              </DialogDescription>
+              <DialogDescription>Modify the session details</DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               <div>
-                <Label>Course</Label>
+                <Label>Session Name *</Label>
+                <Input
+                  name="nom"
+                  value={seanceFormData.nom}
+                  onChange={handleSeanceChange}
+                  placeholder="e.g., Session 1, Midterm Review"
+                />
+              </div>
+              <div>
+                <Label>Course *</Label>
                 <Select
                   value={seanceFormData.cours}
                   onValueChange={(value) =>
@@ -1199,7 +1171,7 @@ export default function AdminTimetable() {
                       </div>
                     ) : (
                       getCoursesForSelectedClass().map((cours) => (
-                        <SelectItem key={cours._id} value={cours._id}>
+                        <SelectItem key={extractId(cours)} value={extractId(cours)}>
                           {cours.nom}
                         </SelectItem>
                       ))
@@ -1208,7 +1180,7 @@ export default function AdminTimetable() {
                 </Select>
               </div>
               <div>
-                <Label>Type</Label>
+                <Label>Type *</Label>
                 <Select
                   value={seanceFormData.typeCours}
                   onValueChange={(value) =>
@@ -1225,9 +1197,35 @@ export default function AdminTimetable() {
                   </SelectContent>
                 </Select>
               </div>
+              <div>
+                <Label>Teacher *</Label>
+                <Select
+                  value={seanceFormData.enseignant}
+                  onValueChange={(value) =>
+                    handleSelectChange("enseignant", value, "seance")
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select teacher" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {teachers.length === 0 ? (
+                      <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                        No teachers available
+                      </div>
+                    ) : (
+                      teachers.map((teacher) => (
+                        <SelectItem key={extractId(teacher)} value={extractId(teacher)}>
+                          {teacher.nom} {teacher.prenom}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>Day</Label>
+                  <Label>Day *</Label>
                   <Select
                     value={seanceFormData.jourSemaine}
                     onValueChange={(value) =>
@@ -1255,7 +1253,7 @@ export default function AdminTimetable() {
                   </Select>
                 </div>
                 <div>
-                  <Label>Room</Label>
+                  <Label>Room *</Label>
                   <Input
                     name="salle"
                     value={seanceFormData.salle}
@@ -1266,7 +1264,7 @@ export default function AdminTimetable() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>Start Time</Label>
+                  <Label>Start Time *</Label>
                   <Input
                     type="time"
                     name="heureDebut"
@@ -1275,7 +1273,7 @@ export default function AdminTimetable() {
                   />
                 </div>
                 <div>
-                  <Label>End Time</Label>
+                  <Label>End Time *</Label>
                   <Input
                     type="time"
                     name="heureFin"
@@ -1295,7 +1293,7 @@ export default function AdminTimetable() {
               </div>
             </div>
             <DialogFooter>
-              <Button 
+              <Button
                 variant="outline"
                 onClick={() => {
                   setShowUpdateSeanceDialog(false);
@@ -1330,7 +1328,8 @@ export default function AdminTimetable() {
               <DialogTitle>Confirm Deletion</DialogTitle>
               <DialogDescription>
                 Are you sure you want to delete this {deleteConfirm.type}?
-                {deleteConfirm.type === "emploi" && " This will also delete all associated sessions."}
+                {deleteConfirm.type === "emploi" &&
+                  " This will also delete all associated sessions."}
               </DialogDescription>
             </DialogHeader>
             <DialogFooter className="flex justify-between">
