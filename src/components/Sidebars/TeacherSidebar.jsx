@@ -9,7 +9,8 @@ import {
   Bell,
   Users,
   GraduationCap,
-  FileText ,
+  FileText,
+  Megaphone,
 } from "lucide-react";
 
 import {
@@ -39,6 +40,7 @@ const navItems = [
   { path: "grading", label: "Grading", icon: GraduationCap },
   { path: "attendance", label: "Attendance", icon: UserCheck },
   { path: "schedule", label: "Schedule", icon: Calendar },
+  { path: "announcements", label: "Announcements", icon: Megaphone }, 
   { path: "messages", label: "Messages", icon: MessageSquare },
   { path: "notifications", label: "Notifications", icon: Bell },
 ];

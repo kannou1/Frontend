@@ -39,6 +39,7 @@ import TeacherStudents from "./pages/Teacher/Students";
 import TeacherMessages from "./pages/Teacher/Messages";
 import TeacherProfile from "./pages/Teacher/Profile";
 import TeacherNotifications from "./pages/Teacher/Notifications";
+import TeacherAnnouncements from "./pages/Teacher/Announcements";
 import TeacherAssignments from "./pages/Teacher/assignments";
 
 // Student Section
@@ -127,6 +128,7 @@ const App = () => (
                   path="notifications"
                   element={<TeacherNotifications />}
                 />
+                <Route path="announcements" element={<TeacherAnnouncements />} />
                 <Route path="profile" element={<TeacherProfile />} />
                 <Route path="assignments" element={<TeacherAssignments />} />
                 <Route path="*" element={<StudentNotFound />} />
