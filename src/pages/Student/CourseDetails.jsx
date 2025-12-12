@@ -412,9 +412,16 @@ const StudentCourseDetails = ({ token }) => {
 
       if (userSubmission) {
         console.log(`✅ Found submission:`, userSubmission);
+        const data = { ...userSubmission };
+        // Always merge note from notesMap if available, overriding submission data
+        const noteFromMap = notesMap[assignment._id || assignment.id];
+        if (noteFromMap && (noteFromMap.score !== undefined || noteFromMap.note !== undefined)) {
+          data.note = noteFromMap.score ?? noteFromMap.note;
+          data.commentaire = noteFromMap.commentaire || noteFromMap.feedback || data.commentaire;
+        }
         return {
           submitted: true,
-          data: userSubmission
+          data
         };
       } else {
         console.log(`❌ No matching submission found in array of ${assignment.submissions.length}`);
@@ -705,14 +712,34 @@ const StudentCourseDetails = ({ token }) => {
                                   Submitted on {new Date(submissionInfo.data.dateSubmission).toLocaleString("fr-FR")}
                                 </p>
                                 {submissionInfo.data.note != null && (
-                                  <p className="text-sm mt-1">
-                                    <span className="font-semibold">Grade:</span> {submissionInfo.data.note}/{a.noteMax}
-                                  </p>
-                                )}
-                                {submissionInfo.data.commentaire && (
-                                  <p className="text-sm mt-1 text-muted-foreground">
-                                    <span className="font-semibold">Feedback:</span> {submissionInfo.data.commentaire}
-                                  </p>
+                                  <div className={`mt-3 p-3 rounded-lg border ${
+                                    submissionInfo.data.note >= 14
+                                      ? "bg-green-50 border-green-200"
+                                      : submissionInfo.data.note >= 10
+                                      ? "bg-yellow-50 border-yellow-200"
+                                      : "bg-red-50 border-red-200"
+                                  }`}>
+                                    <p className={`text-sm font-semibold ${
+                                      submissionInfo.data.note >= 14
+                                        ? "text-green-800"
+                                        : submissionInfo.data.note >= 10
+                                        ? "text-yellow-800"
+                                        : "text-red-800"
+                                    }`}>
+                                      Your Grade: {submissionInfo.data.note}/{a.noteMax}
+                                    </p>
+                                    {submissionInfo.data.commentaire && (
+                                      <p className={`text-sm mt-1 ${
+                                        submissionInfo.data.note >= 14
+                                          ? "text-green-700"
+                                          : submissionInfo.data.note >= 10
+                                          ? "text-yellow-700"
+                                          : "text-red-700"
+                                      }`}>
+                                        {submissionInfo.data.commentaire}
+                                      </p>
+                                    )}
+                                  </div>
                                 )}
                                 {/* Replace/Delete actions: only if not graded */}
                                 {submissionInfo.data.note == null && (
@@ -878,12 +905,30 @@ const StudentCourseDetails = ({ token }) => {
                           </div>
 
                           {studentGrade && (
-                            <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-                              <p className="text-sm font-semibold text-green-800">
+                            <div className={`mt-4 p-3 rounded-lg border ${
+                              (studentGrade.score ?? studentGrade.note) >= 14
+                                ? "bg-green-50 border-green-200"
+                                : (studentGrade.score ?? studentGrade.note) >= 10
+                                ? "bg-yellow-50 border-yellow-200"
+                                : "bg-red-50 border-red-200"
+                            }`}>
+                              <p className={`text-sm font-semibold ${
+                                (studentGrade.score ?? studentGrade.note) >= 14
+                                  ? "text-green-800"
+                                  : (studentGrade.score ?? studentGrade.note) >= 10
+                                  ? "text-yellow-800"
+                                  : "text-red-800"
+                              }`}>
                                 Your Grade: {(studentGrade.score ?? studentGrade.note)}/{e.noteMax}
                               </p>
                               {studentGrade.commentaire && (
-                                <p className="text-sm text-green-700 mt-1">
+                                <p className={`text-sm mt-1 ${
+                                  (studentGrade.score ?? studentGrade.note) >= 14
+                                    ? "text-green-700"
+                                    : (studentGrade.score ?? studentGrade.note) >= 10
+                                    ? "text-yellow-700"
+                                    : "text-red-700"
+                                }`}>
                                   {studentGrade.commentaire}
                                 </p>
                               )}

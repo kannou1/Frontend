@@ -55,3 +55,12 @@ export async function getNoteByExamenAndEtudiant(examenId, etudiantId) {
     withCredentials: true,
   });
 }
+
+/* ===============================
+   GET NOTES FOR STUDENT
+================================ */
+export async function getNotesForStudent() {
+  return axios.get(`${API_URL}/getForStudent`, {
+    withCredentials: true,
+  });
+}
