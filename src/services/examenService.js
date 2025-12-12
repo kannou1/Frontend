@@ -47,6 +47,28 @@ export async function submitAssignment(examenId, file) {
   });
 }
 
+/** Replace/update an existing assignment submission (upload new file) */
+export async function updateSubmission(examenId, file) {
+  if (!file) throw new Error("Fichier requis");
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  return await axios.put(`${API_URL}/updateSubmission/${examenId}`, formData, {
+    withCredentials: true,
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
+}
+
+/** Delete a student's submission for an assignment */
+export async function deleteSubmission(examenId) {
+  return await axios.delete(`${API_URL}/deleteSubmission/${examenId}`, {
+    withCredentials: true,
+  });
+}
+
 /** Download a single assignment file */
 export async function downloadAssignmentFile(examenId, studentId) {
   return await axios.get(`${API_URL}/downloadAssignmentFile/${examenId}/${studentId}`, {

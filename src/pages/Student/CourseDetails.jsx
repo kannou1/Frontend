@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef, useContext } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getCoursById } from "../../services/coursService";
 import { getMaterialsByCourse } from "../../services/courseMaterialService";
-import { submitAssignment } from "../../services/examenService";
+import { submitAssignment, updateSubmission, deleteSubmission } from "../../services/examenService";
 import { getNoteByExamenAndEtudiant } from "../../services/noteService";
 import { AuthContext } from "../../contexts/AuthContext";
 import { Card, CardContent } from "@/components/ui/card";
@@ -48,11 +48,15 @@ const StudentCourseDetails = ({ token }) => {
     exams: true,
   });
   const [notesMap, setNotesMap] = useState({});
+  const [localSubmissionMap, setLocalSubmissionMap] = useState({});
   const [debugNotesVisible, setDebugNotesVisible] = useState(false);
   const [activeTab, setActiveTab] = useState("chapters");
   const [toast, setToast] = useState(null);
   const [toastType, setToastType] = useState("error");
   const [submittingAssignment, setSubmittingAssignment] = useState(null);
+  const [processingReplaceAssignment, setProcessingReplaceAssignment] = useState(null);
+  const [deletingAssignment, setDeletingAssignment] = useState(null);
+  const [actionModeMap, setActionModeMap] = useState({});
   const [selectedFileMap, setSelectedFileMap] = useState({});
 
   const fileInputRefs = useRef({});
@@ -113,9 +117,31 @@ const StudentCourseDetails = ({ token }) => {
         console.log(`📋 Assignment "${a.nom || a.title}" submissions:`, a.submissions);
         if (a.submissions) {
           a.submissions.forEach(sub => {
-            const subUserId = typeof sub.etudiant === 'object' ? sub.etudiant?._id : sub.etudiant;
+            const subUserId = sub.studentId;
             console.log(`   - Submission by: ${subUserId}, isCurrentUser: ${subUserId === userId || String(subUserId) === String(userId)}`);
           });
+        }
+      });
+
+      // Build a remote-submission map for current student's submissions
+      const remoteSubmissionMap = {};
+      assignments.forEach(a => {
+        if (a.submissions && a.submissions.length > 0) {
+          const userSubmission = a.submissions.find(sub => {
+            const subUserId = sub.studentId;
+            return String(subUserId) === String(userId);
+          });
+          if (userSubmission) {
+            remoteSubmissionMap[a._id] = {
+              submitted: true,
+              data: {
+                note: userSubmission.note ?? userSubmission.mark ?? null,
+                commentaire: userSubmission.commentaire || userSubmission.feedback || null,
+                dateSubmission: userSubmission.dateSubmission || userSubmission.date || new Date().toISOString(),
+                fileName: userSubmission.fichier || userSubmission.file || null,
+              }
+            };
+          }
         }
       });
 
@@ -140,6 +166,15 @@ const StudentCourseDetails = ({ token }) => {
           }),
         500
       );
+
+      // Merge remote submissions: when backend confirms a submission, override local map
+      setLocalSubmissionMap(prev => {
+        const merged = { ...prev };
+        Object.keys(remoteSubmissionMap).forEach(k => {
+          merged[k] = remoteSubmissionMap[k];
+        });
+        return merged;
+      });
 
       // Fetch per-exam notes for current student
       try {
@@ -202,10 +237,17 @@ const StudentCourseDetails = ({ token }) => {
     }
 
     setSelectedFileMap(prev => ({ ...prev, [assignmentId]: file }));
+
+    // If user is replacing a submission, auto-submit the replacement
+    const mode = actionModeMap[assignmentId] || 'submit';
+    if (mode === 'replace') {
+      handleReplaceSubmission(assignmentId, file);
+    }
   };
 
   // Trigger file input
-  const triggerFileInput = (assignmentId) => {
+  const triggerFileInput = (assignmentId, mode = 'submit') => {
+    setActionModeMap(prev => ({ ...prev, [assignmentId]: mode }));
     const ref = fileInputRefs.current[assignmentId];
     if (ref) ref.click();
   };
@@ -235,6 +277,20 @@ const StudentCourseDetails = ({ token }) => {
         return copy;
       });
 
+      // Immediately reflect that the user has submitted locally
+      setLocalSubmissionMap(prev => ({
+        ...prev,
+        [assignmentId]: {
+          submitted: true,
+          data: {
+            dateSubmission: new Date().toISOString(),
+            note: null,
+            commentaire: null,
+            fileName: file.name,
+          }
+        }
+      }));
+
       // ✅ CRITICAL: Wait a moment for backend to process, then refresh
       setTimeout(async () => {
         await fetchCourseAndMaterials();
@@ -258,6 +314,79 @@ const StudentCourseDetails = ({ token }) => {
     }
   };
 
+  // Replace an existing submitted assignment (student action)
+  const handleReplaceSubmission = async (assignmentId, fileOverride = null) => {
+    const file = fileOverride || selectedFileMap[assignmentId];
+    if (!file) {
+      showToastMessage("Please select a file to replace the submission");
+      return;
+    }
+
+    try {
+      setProcessingReplaceAssignment(assignmentId);
+      const response = await updateSubmission(assignmentId, file);
+      console.log("✅ Replacement response:", response);
+      showToastMessage("Submission updated successfully!", "success");
+      setSelectedFileMap(prev => {
+        const copy = { ...prev };
+        delete copy[assignmentId];
+        return copy;
+      });
+      // Refresh
+      setTimeout(async () => {
+        await fetchCourseAndMaterials();
+      }, 500);
+      // Immediately reflect replacement locally as submitted
+      setLocalSubmissionMap(prev => ({
+        ...prev,
+        [assignmentId]: {
+          submitted: true,
+          data: {
+            dateSubmission: new Date().toISOString(),
+            note: null,
+            commentaire: null,
+            fileName: file.name,
+          }
+        }
+      }));
+    } catch (error) {
+      console.error("❌ Error replacing submission:", error);
+      showToastMessage(error.response?.data?.message || error.message || "Failed to replace submission");
+    } finally {
+      setProcessingReplaceAssignment(null);
+      // reset action mode
+      setActionModeMap(prev => ({ ...prev, [assignmentId]: 'submit' }));
+    }
+  };
+
+  // Delete a student's submission
+  const handleDeleteSubmission = async (assignmentId) => {
+    const confirm = window.confirm("Are you sure you want to delete your submission? This action cannot be undone.");
+    if (!confirm) return;
+
+    try {
+      setDeletingAssignment(assignmentId);
+      const response = await deleteSubmission(assignmentId);
+      console.log("✅ Delete response:", response);
+      showToastMessage("Submission deleted successfully!", "success");
+      // Refresh
+      setTimeout(async () => {
+        await fetchCourseAndMaterials();
+      }, 500);
+      // Remove local submission map entry to reflect deletion
+      setLocalSubmissionMap(prev => {
+        const copy = { ...prev };
+        delete copy[assignmentId];
+        return copy;
+      });
+    } catch (error) {
+      console.error("❌ Error deleting submission:", error);
+      showToastMessage(error.response?.data?.message || error.message || "Failed to delete submission");
+    } finally {
+      setDeletingAssignment(null);
+    }
+  };
+
   // Get submission status
   const getSubmissionStatus = (assignment) => {
     console.log(`🔍 Checking submission for: ${assignment.nom || assignment.title}`);
@@ -265,12 +394,17 @@ const StudentCourseDetails = ({ token }) => {
     console.log(`   Submissions array:`, assignment.submissions);
     console.log(`   Current userId: ${userId}`);
 
+    // First, check local submission map (for immediate feedback after submit)
+    const localSub = localSubmissionMap[assignment._id];
+    if (localSub) {
+      console.log(`✅ Found local submission:`, localSub);
+      return localSub;
+    }
+
     if (assignment.submissions && Array.isArray(assignment.submissions) && assignment.submissions.length > 0) {
       const userSubmission = assignment.submissions.find(sub => {
-        const subUserId = typeof sub.etudiant === 'object'
-          ? sub.etudiant?._id
-          : sub.etudiant;
-        
+        const subUserId = sub.studentId;
+
         const match = String(subUserId) === String(userId);
         console.log(`   Comparing: ${subUserId} === ${userId} ? ${match}`);
         return match;
@@ -552,6 +686,15 @@ const StudentCourseDetails = ({ token }) => {
                           </div>
                         </div>
 
+                        {/* Always available hidden file input (for submit OR replace) */}
+                        <input
+                          ref={(el) => (fileInputRefs.current[a._id] = el)}
+                          type="file"
+                          className="hidden"
+                          onChange={(e) => handleFileSelect(e, a._id)}
+                          accept=".pdf,.doc,.docx,.txt,.zip,.rar"
+                        />
+
                         {/* Submission info */}
                         {submissionInfo.submitted && (
                           <div className="bg-muted/50 p-4 rounded-lg border border-muted">
@@ -571,6 +714,39 @@ const StudentCourseDetails = ({ token }) => {
                                     <span className="font-semibold">Feedback:</span> {submissionInfo.data.commentaire}
                                   </p>
                                 )}
+                                {/* Replace/Delete actions: only if not graded */}
+                                {submissionInfo.data.note == null && (
+                                  <div className="mt-3 flex gap-2">
+                                    <Button
+                                      variant="outline"
+                                      onClick={() => triggerFileInput(a._id, 'replace')}
+                                      disabled={processingReplaceAssignment === a._id}
+                                    >
+                                      {processingReplaceAssignment === a._id ? (
+                                        <>
+                                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                          Replacing...
+                                        </>
+                                      ) : (
+                                        "Replace File"
+                                      )}
+                                    </Button>
+                                    <Button
+                                      variant="destructive"
+                                      onClick={() => handleDeleteSubmission(a._id)}
+                                      disabled={deletingAssignment === a._id}
+                                    >
+                                      {deletingAssignment === a._id ? (
+                                        <>
+                                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                          Deleting...
+                                        </>
+                                      ) : (
+                                        "Delete Submission"
+                                      )}
+                                    </Button>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -580,13 +756,7 @@ const StudentCourseDetails = ({ token }) => {
                         {!submissionInfo.submitted && dueDate && dueDate > now && (
                           <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-muted">
                             <div className="flex-1">
-                              <input
-                                ref={(el) => (fileInputRefs.current[a._id] = el)}
-                                type="file"
-                                className="hidden"
-                                onChange={(e) => handleFileSelect(e, a._id)}
-                                accept=".pdf,.doc,.docx,.txt,.zip,.rar"
-                              />
+                              {/* File input is now always available above */}
 
                               <Button
                                 type="button"
